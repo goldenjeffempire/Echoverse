@@ -3,26 +3,26 @@ import { Link } from "wouter";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
 } from "@/components/ui/tabs";
-import { 
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
-  AccordionTrigger,
+  AccordionTrigger
 } from "@/components/ui/accordion";
 import { motion } from "framer-motion";
-import { 
-  Search, 
-  Book, 
-  HelpCircle, 
-  FileText, 
-  MessageSquare, 
-  Video, 
+import {
+  Search,
+  Book,
+  HelpCircle,
+  FileText,
+  MessageSquare,
+  Video,
   ArrowLeftCircle,
   ChevronRight,
   Lightbulb,
@@ -40,7 +40,15 @@ interface CategoryCardProps {
   index: number;
 }
 
-const CategoryCard = ({ icon, title, description, count, link, color, index }: CategoryCardProps) => {
+const CategoryCard = ({
+  icon,
+  title,
+  description,
+  count,
+  link,
+  color,
+  index
+}: CategoryCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -235,261 +243,87 @@ export default function HelpCenterPage() {
     },
     {
       title: "Troubleshooting Common Issues",
-      description: "Quick fixes for the most frequent problems.",
-      icon: <RefreshCw className="h-5 w-5" />,
-      link: "#troubleshooting-guide"
-    }
+      description: "Quick fixes for common platform problems.",
+      icon: <HelpCircle className="h-5 w-5" />,
+      link: "#troubleshooting"
+    },
   ];
 
-  // Filter FAQs based on search query
-  const filteredFaqs = faqCategories.flatMap(category => 
-    category.items
-      .filter(item => 
-        item.question.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        item.answer.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-      .map(item => ({ ...item, category: category.category }))
-  );
-
   return (
-    <>
+    <div className="container mx-auto px-4 py-8">
       <Helmet>
-        <title>Help Center - Echoverse</title>
-        <meta name="description" content="Find answers to your questions about Echoverse. Browse our documentation, FAQs, and tutorials to learn more about our platform." />
+        <title>Help Center | Echoverse</title>
       </Helmet>
 
-      <div className="min-h-screen bg-dark-base">
-        {/* Hero section */}
-        <div className="relative overflow-hidden bg-dark-default pt-16 pb-12">
-          <div className="absolute inset-0 bg-mesh opacity-30"></div>
-          
-          <div className="container mx-auto px-6 relative z-10">
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="mb-6">
-                <ArrowLeftCircle className="mr-2 h-4 w-4" /> Back to Home
-              </Button>
-            </Link>
-            
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-center max-w-4xl mx-auto"
+      <h1 className="text-4xl font-bold text-primary mb-6">Help Center</h1>
+
+      {/* Search Input */}
+      <div className="mb-8">
+        <Input
+          className="w-full"
+          placeholder="Search Help Center"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          icon={<Search className="w-5 h-5 text-light-base/60" />}
+        />
+      </div>
+
+      {/* Help Center Categories */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {categories.map((category) => (
+          <CategoryCard key={category.title} {...category} />
+        ))}
+      </div>
+
+      {/* Featured Articles */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-primary mb-4">Featured Articles</h2>
+        <div className="space-y-4">
+          {featuredArticles.map((article, index) => (
+            <div
+              key={article.title}
+              className="flex items-center bg-dark-card p-4 rounded-lg border border-primary/20 hover:border-primary/60 transition-all"
             >
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
-                How can we help you?
-              </h1>
-              <p className="text-light-base/70 text-lg mb-8 max-w-2xl mx-auto">
-                Search our knowledge base or browse categories to find answers to your questions.
-              </p>
-              
-              <div className="relative max-w-2xl mx-auto">
-                <Search className="absolute left-4 top-3.5 h-5 w-5 text-light-base/40" />
-                <Input
-                  type="text"
-                  placeholder="Search for answers..."
-                  className="pl-12 pr-4 py-6 bg-dark-card border-primary/20 rounded-lg text-lg w-full focus-visible:ring-primary"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="container mx-auto px-6 py-12">
-          {/* Featured articles section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-16"
-          >
-            <h2 className="text-2xl font-bold mb-6">Featured Articles</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredArticles.map((article, index) => (
-                <div 
-                  key={index}
-                  className="bg-dark-card border border-primary/20 rounded-lg p-5 hover:border-primary/60 transition-all duration-300"
-                >
-                  <div className="bg-primary/10 w-10 h-10 rounded-full flex items-center justify-center text-primary mb-4">
-                    {article.icon}
-                  </div>
-                  <h3 className="font-medium mb-2">{article.title}</h3>
-                  <p className="text-light-base/70 text-sm mb-3">{article.description}</p>
-                  <Link href={article.link} className="text-primary text-sm flex items-center">
-                    Read article <ChevronRight className="h-4 w-4 ml-1" />
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Tabs section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <Tabs defaultValue="browse" className="mb-16">
-              <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto">
-                <TabsTrigger value="browse">Browse</TabsTrigger>
-                <TabsTrigger value="faq">FAQ</TabsTrigger>
-                <TabsTrigger value="videos">Videos</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="browse" className="mt-6">
-                {searchQuery ? (
-                  <div className="mb-8">
-                    <h2 className="text-xl font-medium mb-4">Search Results for "{searchQuery}"</h2>
-                    {filteredFaqs.length > 0 ? (
-                      <div className="space-y-4">
-                        {filteredFaqs.map((item, index) => (
-                          <div key={index} className="bg-dark-card border border-primary/20 rounded-lg p-5">
-                            <div className="flex items-start">
-                              <HelpCircle className="h-5 w-5 text-primary mt-0.5 mr-3 flex-shrink-0" />
-                              <div>
-                                <h3 className="font-medium mb-2">{item.question}</h3>
-                                <p className="text-light-base/70 text-sm">{item.answer}</p>
-                                <div className="mt-2 text-xs bg-primary/10 text-primary inline-block px-2 py-1 rounded-full">
-                                  {item.category}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <HelpCircle className="h-12 w-12 text-light-base/30 mx-auto mb-3" />
-                        <p className="text-light-base/70 mb-2">No results found for "{searchQuery}"</p>
-                        <p className="text-sm text-light-base/50 mb-4">Try a different search term or browse categories below</p>
-                        <Button variant="outline" onClick={() => setSearchQuery("")}>
-                          Clear Search
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-                    {categories.map((category, index) => (
-                      <CategoryCard key={index} {...category} />
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="faq" className="mt-6">
-                <div className="max-w-3xl mx-auto">
-                  {faqCategories.map((category, categoryIndex) => (
-                    <div key={categoryIndex} className="mb-8">
-                      <div className="flex items-center mb-4">
-                        <div className="bg-primary/10 w-8 h-8 rounded-full flex items-center justify-center text-primary mr-2">
-                          {category.icon}
-                        </div>
-                        <h2 className="text-xl font-medium">{category.category}</h2>
-                      </div>
-                      
-                      <Accordion type="single" collapsible className="bg-dark-card rounded-lg border border-primary/20">
-                        {category.items.map((item, itemIndex) => (
-                          <AccordionItem key={itemIndex} value={`item-${categoryIndex}-${itemIndex}`}>
-                            <AccordionTrigger className="px-6 text-left hover:no-underline">
-                              {item.question}
-                            </AccordionTrigger>
-                            <AccordionContent className="px-6 pb-4 text-light-base/70">
-                              {item.answer}
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="videos" className="mt-6">
-                <div className="text-center max-w-2xl mx-auto py-12">
-                  <Video className="h-16 w-16 text-light-base/30 mx-auto mb-4" />
-                  <h2 className="text-2xl font-medium mb-3">Video Tutorials Coming Soon</h2>
-                  <p className="text-light-base/70 mb-6">
-                    We're currently working on creating video tutorials to help you get the most out of Echoverse.
-                    Check back soon or subscribe to our newsletter to be notified when they're available.
-                  </p>
-                  <Button>
-                    Subscribe to Updates
-                  </Button>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </motion.div>
-
-          {/* Contact support section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="bg-gradient-to-r from-primary to-accent-purple p-0.5 rounded-xl shadow-md"
-          >
-            <div className="bg-dark-default rounded-lg p-8 flex flex-col md:flex-row items-center justify-between">
+              <div className="mr-4">{article.icon}</div>
               <div>
-                <h2 className="text-2xl font-bold mb-2">Still need help?</h2>
-                <p className="text-light-base/70 max-w-xl">
-                  Can't find what you're looking for? Our support team is ready to assist you with any questions you may have.
-                </p>
-              </div>
-              <div className="mt-6 md:mt-0 flex flex-wrap gap-4">
-                <Button variant="default" className="px-6">
-                  <MessageSquare className="mr-2 h-4 w-4" /> Contact Support
-                </Button>
-                <Button variant="outline" className="px-6">
-                  <Video className="mr-2 h-4 w-4" /> Request Demo
-                </Button>
+                <h3 className="text-lg font-medium">{article.title}</h3>
+                <p className="text-sm text-light-base/70">{article.description}</p>
+                <Link href={article.link} className="text-primary text-sm">
+                  Read more
+                </Link>
               </div>
             </div>
-          </motion.div>
+          ))}
         </div>
       </div>
-    </>
-  );
-}
-import { MainLayout } from "@/components/layouts/main-layout";
-import { motion } from "framer-motion";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-export default function HelpCenterPage() {
-  const faqs = [
-    {
-      question: "How do I get started?",
-      answer: "Sign up for an account and follow our quick start guide to begin your journey."
-    },
-    {
-      question: "What are the system requirements?",
-      answer: "Our platform is web-based and works on all modern browsers."
-    }
-  ];
-
-  return (
-    <MainLayout>
-      <div className="container mx-auto px-4 py-16 max-w-7xl">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1 className="text-4xl font-bold mb-6">Help Center</h1>
-          <div className="mt-8 max-w-3xl mx-auto">
-            <Accordion type="single" collapsible>
-              {faqs.map((faq, index) => (
-                <AccordionItem key={index} value={`item-${index}`}>
-                  <AccordionTrigger>{faq.question}</AccordionTrigger>
-                  <AccordionContent>{faq.answer}</AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </div>
-        </motion.div>
+      {/* FAQ Accordion */}
+      <div>
+        <Tabs defaultValue="account">
+          <TabsList className="space-x-4">
+            {faqCategories.map((category) => (
+              <TabsTrigger key={category.category} value={category.category.toLowerCase()}>
+                <div className="flex items-center space-x-2">
+                  {category.icon}
+                  <span>{category.category}</span>
+                </div>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {faqCategories.map((category) => (
+            <TabsContent key={category.category} value={category.category.toLowerCase()}>
+              <Accordion type="single" collapsible>
+                {category.items.map((item, index) => (
+                  <AccordionItem key={index} value={`item-${index}`}>
+                    <AccordionTrigger>{item.question}</AccordionTrigger>
+                    <AccordionContent>{item.answer}</AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
-    </MainLayout>
+    </div>
   );
 }
