@@ -6,9 +6,103 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, Brain, BarChart2, Zap } from "lucide-react";
 
 export function HeroSection() {
-  const [activeTestimonial, setActiveTestimonial] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const featurePills = [
+    "Students",
+    "Developers", 
+    "Marketers",
+    "Educators",
+    "Entrepreneurs"
+  ];
+
+  return (
+    <div className="relative bg-dark-base pt-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+              <span>✨</span>
+              <span>Introducing Echoverse</span>
+              <span>✨</span>
+            </div>
+            
+            <h1 className="text-5xl font-bold mb-6">
+              <span className="block text-white">The Ultimate</span>
+              <span className="block bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent-purple">AI-Native Platform</span>
+            </h1>
+
+            <p className="text-xl text-light-base/70 mb-8">
+              Build, learn, sell, and grow with our modular AI tools designed for every role, from students to enterprise teams.
+            </p>
+
+            <div className="flex flex-col sm:flex-row justify-center lg:justify-start gap-4 mb-8">
+              <Link href="/auth">
+                <Button className="w-full sm:w-auto text-lg px-8 py-6 bg-primary hover:bg-primary/90">
+                  Start For Free
+                </Button>
+              </Link>
+              <Button variant="outline" className="w-full sm:w-auto text-lg px-8 py-6">
+                Watch Demo
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
+              {featurePills.map((pill, index) => (
+                <span 
+                  key={index}
+                  className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm"
+                >
+                  {pill}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="aspect-square lg:aspect-video relative bg-dark-card rounded-xl border border-primary/20 p-8">
+              <div className="absolute inset-0 bg-mesh opacity-10"></div>
+              <div className="relative z-10 flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-r from-primary to-accent-purple p-1 mx-auto mb-4">
+                    <div className="w-full h-full rounded-full bg-dark-base flex items-center justify-center">
+                      <span className="text-4xl font-bold">E</span>
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2">Echoverse Platform</h3>
+                </div>
+              </div>
+              
+              <div className="absolute -top-4 -left-4 bg-dark-base p-3 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                    <Users2 className="w-4 h-4 text-primary" />
+                  </div>
+                  <span className="text-sm">Multi-Tenant</span>
+                </div>
+              </div>
+
+              <div className="absolute -bottom-4 right-8 bg-dark-base p-3 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-accent-purple/20 flex items-center justify-center">
+                    <Blocks className="w-4 h-4 text-accent-purple" />
+                  </div>
+                  <span className="text-sm">Modular Design</span>
+                </div>
+              </div>
+
+              <div className="absolute top-1/2 -right-4 transform -translate-y-1/2 bg-dark-base p-3 rounded-lg border border-primary/20">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-accent-cyan/20 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-accent-cyan" />
+                  </div>
+                  <span className="text-sm">AI-Powered</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   // Auto-advance testimonials
   useEffect(() => {

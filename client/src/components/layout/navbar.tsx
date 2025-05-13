@@ -20,23 +20,32 @@ export function Navbar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
 
-  const navItems = {
-    Solutions: [
-      { name: "AI Tools", href: "/ai-tools" },
+  const menuItems = {
+    Product: [
+      { name: "AI Studio", href: "/ai-studio" },
       { name: "Features", href: "/features" },
-      { name: "Marketplace", href: "/marketplace" },
+      { name: "Projects", href: "/projects" },
+      { name: "Marketplace", href: "/marketplace" }
+    ],
+    Solutions: [
+      { name: "Content Generation", href: "/ai-tools" },
+      { name: "Learning Hub", href: "/learning" },
+      { name: "CMS", href: "/cms" },
+      { name: "E-commerce", href: "/marketplace" }
     ],
     Resources: [
       { name: "Help Center", href: "/help" },
-      { name: "Learning Hub", href: "/learning" },
+      { name: "Documentation", href: "/docs" },
       { name: "Blog", href: "/blog" },
-    ],
-    Company: [
-      { name: "About", href: "/about" },
-      { name: "Pricing", href: "/#pricing" },
-      { name: "Contact", href: "/contact" },
+      { name: "Courses", href: "/courses" },
+      { name: "Books", href: "/books" }
     ]
   };
+
+  const nonDropdownItems = [
+    { name: "Pricing", href: "/pricing" },
+    { name: "Enterprise", href: "/enterprise" }
+  ];
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -53,7 +62,7 @@ export function Navbar() {
             <div className="hidden md:block ml-10">
               <NavigationMenu>
                 <NavigationMenuList>
-                  {Object.entries(navItems).map(([category, items]) => (
+                  {Object.entries(menuItems).map(([category, items]) => (
                     <NavigationMenuItem key={category}>
                       <NavigationMenuTrigger className="text-light-base/70 hover:text-white">
                         {category}
@@ -77,6 +86,21 @@ export function Navbar() {
                           ))}
                         </ul>
                       </NavigationMenuContent>
+                    </NavigationMenuItem>
+                  ))}
+                  {nonDropdownItems.map((item) => (
+                    <NavigationMenuItem key={item.name}>
+                      <Link href={item.href}>
+                        <NavigationMenuLink
+                          className={`block select-none p-3 leading-none no-underline outline-none transition-colors hover:text-white ${
+                            location === item.href
+                              ? "text-white"
+                              : "text-light-base/70"
+                          }`}
+                        >
+                          {item.name}
+                        </NavigationMenuLink>
+                      </Link>
                     </NavigationMenuItem>
                   ))}
                 </NavigationMenuList>
@@ -144,7 +168,7 @@ export function Navbar() {
               </Button>
             </div>
             <div className="p-4 space-y-4">
-              {Object.entries(navItems).map(([category, items]) => (
+              {Object.entries(menuItems).map(([category, items]) => (
                 <div key={category} className="space-y-2">
                   <h3 className="text-white font-medium px-3">{category}</h3>
                   {items.map((item) => (
@@ -162,6 +186,20 @@ export function Navbar() {
                     </Link>
                   ))}
                 </div>
+              ))}
+              {nonDropdownItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-light-base/70 hover:text-white"
+                  >
+                    {item.name}
+                  </Button>
+                </Link>
               ))}
             </div>
             <div className="p-4 border-t border-primary/20 space-y-2">

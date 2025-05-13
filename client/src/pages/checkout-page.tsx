@@ -13,7 +13,7 @@ import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { MainLayout } from "@/components/layouts/main-layout";
 
-// Make sure to call loadStripe outside of a component
+// Ensure that Stripe public key is set correctly
 if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
   throw new Error("Missing Stripe public key");
 }
@@ -35,23 +35,25 @@ function CheckoutForm() {
 
     setIsLoading(true);
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: window.location.origin + "/success",
-      },
-    });
-
-    if (error.type === "card_error" || error.type === "validation_error") {
-      toast({
-        title: "Payment Failed",
-        description: error.message || "An unexpected error occurred.",
-        variant: "destructive",
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: window.location.origin + "/success", // Ensure this is correct in the production environment
+        },
       });
-    } else {
+
+      if (error) {
+        toast({
+          title: "Payment Failed",
+          description: error.message || "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
       toast({
         title: "Payment Failed",
-        description: "An unexpected error occurred.",
+        description: "An unexpected error occurred during payment processing.",
         variant: "destructive",
       });
     }
@@ -94,7 +96,7 @@ export default function CheckoutPage() {
       .then((data) => {
         setClientSecret(data.clientSecret);
       })
-      .catch(error => {
+      .catch((error) => {
         toast({
           title: "Error initializing payment",
           description: error.message || "Could not initialize payment process",

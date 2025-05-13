@@ -1,9 +1,9 @@
-
 import { create } from 'zustand';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from '@/hooks/use-toast';
 import { ReactNode } from 'react';
 
+// Types
 interface User {
   id: string;
   username: string;
@@ -14,33 +14,66 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: any;
-  registerMutation: any;
-  logout: () => Promise<void>;
+  setUser: (user: User | null) => void;
+  setIsLoading: (isLoading: boolean) => void;
 }
 
-async function handleAuthError(error: any) {
-  console.error('Auth error:', error);
-  toast({
-    title: "Authentication Error",
-    description: error.message || "An unexpected error occurred",
-    variant: "destructive",
-  });
-  throw error;
-}
-
+// Zustand store for auth state
 export const useAuth = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
   error: null,
-  loginMutation: useMutation({
+  setUser: (user) => set({ user }),
+  setIsLoading: (isLoading) => set({ isLoading }),
+}));
+
+// Handle authentication errors
+async function handleAuthError(error: any) {
+  console.error('Auth error:', error);
+  toast({
+    title: 'Authentication Error',
+    description: error.message || 'An unexpected error occurred',
+    variant: 'destructive',
+  });
+  throw error;
+}
+
+// AuthProvider component
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth(); // Zustand store for auth state
+
+  // Query to fetch current user data (auth check)
+  useQuery({
+    queryKey: ['auth'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch user');
+        }
+        const user = await response.json();
+        auth.setUser(user); // Update user state
+        auth.setIsLoading(false); // Loading complete
+        return user;
+      } catch (error) {
+        auth.setUser(null); // No user found
+        auth.setIsLoading(false); // Loading complete
+        throw error;
+      }
+    },
+  });
+
+  // Login mutation hook
+  const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       try {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(credentials),
-          credentials: 'include'
+          credentials: 'include',
         });
 
         if (!response.ok) {
@@ -48,21 +81,24 @@ export const useAuth = create<AuthState>((set) => ({
         }
 
         const user = await response.json();
-        set({ user, isLoading: false });
+        auth.setUser(user); // Update user state
+        auth.setIsLoading(false); // Loading complete
         return user;
       } catch (error) {
-        return handleAuthError(error);
+        return handleAuthError(error); // Handle login error
       }
-    }
-  }),
-  registerMutation: useMutation({
+    },
+  });
+
+  // Register mutation hook
+  const registerMutation = useMutation({
     mutationFn: async (userData: any) => {
       try {
         const response = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(userData),
-          credentials: 'include'
+          credentials: 'include',
         });
 
         if (!response.ok) {
@@ -70,52 +106,31 @@ export const useAuth = create<AuthState>((set) => ({
         }
 
         const user = await response.json();
-        set({ user, isLoading: false });
+        auth.setUser(user); // Update user state
+        auth.setIsLoading(false); // Loading complete
         return user;
       } catch (error) {
-        return handleAuthError(error);
+        return handleAuthError(error); // Handle registration error
       }
-    }
-  }),
-  logout: async () => {
+    },
+  });
+
+  // Logout mutation hook
+  const logout = async () => {
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
       });
-      set({ user: null });
+      auth.setUser(null); // Clear user state
     } catch (error) {
-      handleAuthError(error);
+      handleAuthError(error); // Handle logout error
     }
-  }
-}));
+  };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const auth = useAuth();
-
-  useQuery({
-    queryKey: ['auth'],
-    queryFn: async () => {
-      try {
-        const response = await fetch('/api/auth/me', {
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          throw new Error('Failed to fetch user');
-        }
-        const user = await response.json();
-        auth.setState({ user, isLoading: false });
-        return user;
-      } catch (error) {
-        auth.setState({ user: null, isLoading: false });
-        throw error;
-      }
-    }
-  });
-
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+    </>
+  );
 }
