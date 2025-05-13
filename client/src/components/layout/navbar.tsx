@@ -4,7 +4,12 @@ import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import Logo from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
-import { X, Menu, ChevronDown, ShoppingCart } from "lucide-react";
+import { 
+  X, Menu, ChevronDown, ShoppingCart, 
+  Code, Laptop, BookOpen, LayoutDashboard,
+  Settings, Users, FileText, HelpCircle,
+  Briefcase, Store, Box, Rocket
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
   NavigationMenu,
@@ -22,25 +27,31 @@ export function Navbar() {
 
   const menuItems = {
     Product: [
-      { name: "AI Studio", href: "/ai-studio" },
-      { name: "Features", href: "/features" },
-      { name: "Projects", href: "/projects" },
-      { name: "Marketplace", href: "/marketplace" }
+      { name: "AI Studio", href: "/ai-studio", icon: <Code className="w-4 h-4" /> },
+      { name: "Features", href: "/features", icon: <Rocket className="w-4 h-4" /> },
+      { name: "Projects", href: "/projects", icon: <Box className="w-4 h-4" /> },
+      { name: "Marketplace", href: "/marketplace", icon: <Store className="w-4 h-4" /> }
     ],
-    Solutions: [
-      { name: "Content Generation", href: "/ai-tools" },
-      { name: "Learning Hub", href: "/learning" },
-      { name: "CMS", href: "/cms" },
-      { name: "E-commerce", href: "/marketplace" }
+    Learn: [
+      { name: "Courses", href: "/courses", icon: <BookOpen className="w-4 h-4" /> },
+      { name: "Books", href: "/books", icon: <FileText className="w-4 h-4" /> },
+      { name: "Blog", href: "/blog", icon: <FileText className="w-4 h-4" /> },
+      { name: "Help Center", href: "/help", icon: <HelpCircle className="w-4 h-4" /> }
     ],
-    Resources: [
-      { name: "Help Center", href: "/help" },
-      { name: "Documentation", href: "/docs" },
-      { name: "Blog", href: "/blog" },
-      { name: "Courses", href: "/courses" },
-      { name: "Books", href: "/books" }
+    Tools: [
+      { name: "AI Tools", href: "/ai-tools", icon: <Laptop className="w-4 h-4" /> },
+      { name: "CMS", href: "/cms", icon: <LayoutDashboard className="w-4 h-4" /> },
+      { name: "Branding", href: "/branding", icon: <Settings className="w-4 h-4" /> },
+      { name: "Jobs", href: "/jobs", icon: <Briefcase className="w-4 h-4" /> }
     ]
   };
+
+  const dashboardItems = user ? [
+    { name: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
+    { name: "Profile", href: "/profile", icon: <Users className="w-4 h-4" /> },
+    { name: "Settings", href: "/settings", icon: <Settings className="w-4 h-4" /> },
+    { name: "My Projects", href: "/projects", icon: <Box className="w-4 h-4" /> }
+  ] : [];
 
   const nonDropdownItems = [
     { name: "Pricing", href: "/pricing" },
@@ -68,17 +79,18 @@ export function Navbar() {
                         {category}
                       </NavigationMenuTrigger>
                       <NavigationMenuContent>
-                        <ul className="grid w-[200px] gap-2 p-4">
+                        <ul className="grid w-[250px] gap-2 p-4">
                           {items.map((item) => (
                             <li key={item.name}>
                               <Link href={item.href}>
                                 <NavigationMenuLink
-                                  className={`block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-primary/10 hover:text-white ${
+                                  className={`flex items-center gap-2 select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-primary/10 hover:text-white ${
                                     location === item.href
-                                      ? "text-white"
+                                      ? "text-white bg-primary/5"
                                       : "text-light-base/70"
                                   }`}
                                 >
+                                  {item.icon}
                                   {item.name}
                                 </NavigationMenuLink>
                               </Link>
@@ -110,21 +122,52 @@ export function Navbar() {
           
           <div className="hidden md:flex items-center gap-4">
             <Link href="/cart" className="relative">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="relative">
                 <ShoppingCart className="h-5 w-5 text-light-base" />
                 <span className="absolute -top-1 -right-1 bg-primary text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">2</span>
               </Button>
             </Link>
             
             {user ? (
-              <>
-                <Link href="/dashboard">
-                  <Button variant="ghost">Dashboard</Button>
-                </Link>
-                <Button onClick={handleLogout} variant="default">
-                  Sign Out
-                </Button>
-              </>
+              <NavigationMenu>
+                <NavigationMenuList>
+                  <NavigationMenuItem>
+                    <NavigationMenuTrigger className="text-light-base/70 hover:text-white">
+                      Account
+                    </NavigationMenuTrigger>
+                    <NavigationMenuContent>
+                      <ul className="grid w-[200px] gap-2 p-4">
+                        {dashboardItems.map((item) => (
+                          <li key={item.name}>
+                            <Link href={item.href}>
+                              <NavigationMenuLink
+                                className={`flex items-center gap-2 select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-primary/10 hover:text-white ${
+                                  location === item.href
+                                    ? "text-white bg-primary/5"
+                                    : "text-light-base/70"
+                                }`}
+                              >
+                                {item.icon}
+                                {item.name}
+                              </NavigationMenuLink>
+                            </Link>
+                          </li>
+                        ))}
+                        <li>
+                          <Button
+                            onClick={handleLogout}
+                            variant="ghost"
+                            className="w-full justify-start text-light-base/70 hover:text-white p-3"
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Sign Out
+                          </Button>
+                        </li>
+                      </ul>
+                    </NavigationMenuContent>
+                  </NavigationMenuItem>
+                </NavigationMenuList>
+              </NavigationMenu>
             ) : (
               <>
                 <Link href="/auth">
@@ -167,7 +210,7 @@ export function Navbar() {
                 <X className="h-6 w-6" />
               </Button>
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-5rem)]">
               {Object.entries(menuItems).map(([category, items]) => (
                 <div key={category} className="space-y-2">
                   <h3 className="text-white font-medium px-3">{category}</h3>
@@ -181,7 +224,8 @@ export function Navbar() {
                         variant="ghost"
                         className="w-full justify-start text-light-base/70 hover:text-white"
                       >
-                        {item.name}
+                        {item.icon}
+                        <span className="ml-2">{item.name}</span>
                       </Button>
                     </Link>
                   ))}
@@ -201,26 +245,34 @@ export function Navbar() {
                   </Button>
                 </Link>
               ))}
+              {user && dashboardItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-light-base/70 hover:text-white"
+                  >
+                    {item.icon}
+                    <span className="ml-2">{item.name}</span>
+                  </Button>
+                </Link>
+              ))}
             </div>
             <div className="p-4 border-t border-primary/20 space-y-2">
               {user ? (
-                <>
-                  <Link href="/dashboard">
-                    <Button variant="outline" className="w-full">
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="default"
-                    className="w-full"
-                    onClick={() => {
-                      handleLogout();
-                      setMobileMenuOpen(false);
-                    }}
-                  >
-                    Sign Out
-                  </Button>
-                </>
+                <Button
+                  variant="default"
+                  className="w-full"
+                  onClick={() => {
+                    handleLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  Sign Out
+                </Button>
               ) : (
                 <>
                   <Link href="/auth">
