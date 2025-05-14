@@ -1,292 +1,166 @@
-
-import { useState } from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { motion, AnimatePresence } from "framer-motion";
-import Logo from "@/components/brand/logo";
-import { Button } from "@/components/ui/button";
-import { 
-  X, Menu, ChevronDown, ShoppingCart, 
-  Code, Laptop, BookOpen, LayoutDashboard,
-  Settings, Users, FileText, HelpCircle,
-  Briefcase, Store, Box, Rocket
-} from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu";
+import { AnimatePresence, motion } from "framer-motion";
+import { LucideIcon, LogOutIcon } from "lucide-react";
+
+interface MenuItem {
+  label: string;
+  href?: string;
+  external?: boolean;
+  description?: string;
+  icon?: LucideIcon;
+  children?: MenuItem[];
+}
+
+const menuItems: MenuItem[] = [
+  {
+    label: "Product",
+    children: [
+      { label: "Overview", href: "/overview" },
+      { label: "Features", href: "/features" },
+      { label: "Marketplace", href: "/marketplace" },
+      { label: "Integrations", href: "/integrations" },
+    ],
+  },
+  {
+    label: "Learn",
+    children: [
+      { label: "Tutorials", href: "/tutorials" },
+      { label: "Guides", href: "/guides" },
+      { label: "Case Studies", href: "/case-studies" },
+    ],
+  },
+  {
+    label: "Tools",
+    children: [
+      { label: "CLI", href: "/cli" },
+      { label: "VS Code Extension", href: "/vscode" },
+    ],
+  },
+];
+
+const dashboardItems: MenuItem[] = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Billing", href: "/billing" },
+  { label: "Settings", href: "/settings" },
+];
+
+const nonDropdownItems: MenuItem[] = [
+  { label: "Cart", href: "/cart" },
+  { label: "Account", href: "/account" },
+];
 
 export function Navbar() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [location] = useLocation();
-  const { user, logoutMutation } = useAuth();
 
-  const menuItems = {
-    Product: [
-      { name: "AI Studio", href: "/ai-studio", icon: <Code className="w-4 h-4" /> },
-      { name: "Features", href: "/features", icon: <Rocket className="w-4 h-4" /> },
-      { name: "Projects", href: "/projects", icon: <Box className="w-4 h-4" /> },
-      { name: "Marketplace", href: "/marketplace", icon: <Store className="w-4 h-4" /> }
-    ],
-    Learn: [
-      { name: "Courses", href: "/courses", icon: <BookOpen className="w-4 h-4" /> },
-      { name: "Books", href: "/books", icon: <FileText className="w-4 h-4" /> },
-      { name: "Blog", href: "/blog", icon: <FileText className="w-4 h-4" /> },
-      { name: "Help Center", href: "/help", icon: <HelpCircle className="w-4 h-4" /> }
-    ],
-    Tools: [
-      { name: "AI Tools", href: "/ai-tools", icon: <Laptop className="w-4 h-4" /> },
-      { name: "CMS", href: "/cms", icon: <LayoutDashboard className="w-4 h-4" /> },
-      { name: "Branding", href: "/branding", icon: <Settings className="w-4 h-4" /> },
-      { name: "Jobs", href: "/jobs", icon: <Briefcase className="w-4 h-4" /> }
-    ]
-  };
-
-  const dashboardItems = user ? [
-    { name: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
-    { name: "Profile", href: "/profile", icon: <Users className="w-4 h-4" /> },
-    { name: "Settings", href: "/settings", icon: <Settings className="w-4 h-4" /> },
-    { name: "My Projects", href: "/projects", icon: <Box className="w-4 h-4" /> }
-  ] : [];
-
-  const nonDropdownItems = [
-    { name: "Pricing", href: "/pricing" },
-    { name: "Enterprise", href: "/enterprise" }
-  ];
+  const toggleMobileMenu = () => setMobileMenuOpen(!isMobileMenuOpen);
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   const handleLogout = () => {
-    logoutMutation.mutate();
+    console.log("User signed out");
+    closeMobileMenu();
+  };
+
+  const renderMenuItem = (item: MenuItem, index: number, isMobile = false) => {
+    const isActive = location === item.href;
+    const classes = `block px-4 py-2 text-sm ${isActive ? "bg-gray-100" : "text-gray-700"}`;
+
+    if (item.external) {
+      return (
+        <a
+          key={index}
+          href={item.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={classes}
+        >
+          {item.label}
+        </a>
+      );
+    }
+
+    return (
+      <Link href={item.href || "#"} key={index} onClick={isMobile ? closeMobileMenu : undefined}>
+        <span className={classes}>{item.label}</span>
+      </Link>
+    );
+  };
+
+  const renderDropdown = (item: MenuItem, index: number, isMobile = false) => {
+    return (
+      <div key={index} className="relative group">
+        <button
+          className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+          aria-haspopup="true"
+        >
+          {item.label}
+        </button>
+        <div className={`absolute z-10 ${isMobile ? "block" : "hidden group-hover:block"}`}>
+          <div className="py-1 bg-white shadow-lg">
+            {item.children?.map((child, idx) => renderMenuItem(child, idx, isMobile))}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-dark-base/80 backdrop-blur-lg border-b border-primary/20">
+    <nav className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          <div className="flex items-center">
-            <Link href="/" className="flex-shrink-0">
-              <Logo />
-            </Link>
-            <div className="hidden md:block ml-10">
-              <NavigationMenu>
-                <NavigationMenuList>
-                  {Object.entries(menuItems).map(([category, items]) => (
-                    <NavigationMenuItem key={category}>
-                      <NavigationMenuTrigger className="text-light-base/70 hover:text-white">
-                        {category}
-                      </NavigationMenuTrigger>
-                      <NavigationMenuContent>
-                        <ul className="grid w-[250px] gap-2 p-4">
-                          {items.map((item) => (
-                            <li key={item.name}>
-                              <Link href={item.href}>
-                                <NavigationMenuLink
-                                  className={`flex items-center gap-2 select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-primary/10 hover:text-white ${
-                                    location === item.href
-                                      ? "text-white bg-primary/5"
-                                      : "text-light-base/70"
-                                  }`}
-                                >
-                                  {item.icon}
-                                  {item.name}
-                                </NavigationMenuLink>
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </NavigationMenuContent>
-                    </NavigationMenuItem>
-                  ))}
-                  {nonDropdownItems.map((item) => (
-                    <NavigationMenuItem key={item.name}>
-                      <Link href={item.href}>
-                        <NavigationMenuLink
-                          className={`block select-none p-3 leading-none no-underline outline-none transition-colors hover:text-white ${
-                            location === item.href
-                              ? "text-white"
-                              : "text-light-base/70"
-                          }`}
-                        >
-                          {item.name}
-                        </NavigationMenuLink>
-                      </Link>
-                    </NavigationMenuItem>
-                  ))}
-                </NavigationMenuList>
-              </NavigationMenu>
+        <div className="flex justify-between h-16">
+          <div className="flex">
+            <div className="flex-shrink-0 flex items-center">
+              <Link href="/">
+                <span className="text-xl font-bold">Echoverse</span>
+              </Link>
+            </div>
+            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              {menuItems.map((item, index) =>
+                item.children ? renderDropdown(item, index) : renderMenuItem(item, index)
+              )}
+              {dashboardItems.map((item, index) => renderMenuItem(item, index))}
+              {nonDropdownItems.map((item, index) => renderMenuItem(item, index))}
             </div>
           </div>
-          
-          <div className="hidden md:flex items-center gap-4">
-            <Link href="/cart" className="relative">
-              <Button variant="ghost" size="icon" className="relative">
-                <ShoppingCart className="h-5 w-5 text-light-base" />
-                <span className="absolute -top-1 -right-1 bg-primary text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">2</span>
-              </Button>
-            </Link>
-            
-            {user ? (
-              <NavigationMenu>
-                <NavigationMenuList>
-                  <NavigationMenuItem>
-                    <NavigationMenuTrigger className="text-light-base/70 hover:text-white">
-                      Account
-                    </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-[200px] gap-2 p-4">
-                        {dashboardItems.map((item) => (
-                          <li key={item.name}>
-                            <Link href={item.href}>
-                              <NavigationMenuLink
-                                className={`flex items-center gap-2 select-none rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-primary/10 hover:text-white ${
-                                  location === item.href
-                                    ? "text-white bg-primary/5"
-                                    : "text-light-base/70"
-                                }`}
-                              >
-                                {item.icon}
-                                {item.name}
-                              </NavigationMenuLink>
-                            </Link>
-                          </li>
-                        ))}
-                        <li>
-                          <Button
-                            onClick={handleLogout}
-                            variant="ghost"
-                            className="w-full justify-start text-light-base/70 hover:text-white p-3"
-                          >
-                            <X className="w-4 h-4 mr-2" />
-                            Sign Out
-                          </Button>
-                        </li>
-                      </ul>
-                    </NavigationMenuContent>
-                  </NavigationMenuItem>
-                </NavigationMenuList>
-              </NavigationMenu>
-            ) : (
-              <>
-                <Link href="/auth">
-                  <Button variant="ghost">Sign In</Button>
-                </Link>
-                <Link href="/auth">
-                  <Button variant="default">Sign Up</Button>
-                </Link>
-              </>
-            )}
-          </div>
 
-          <div className="md:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setMobileMenuOpen(true)}
+          <div className="-mr-2 flex items-center sm:hidden">
+            <button
+              onClick={toggleMobileMenu}
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
             >
-              <Menu className="h-6 w-6" />
-            </Button>
+              <svg className="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
+                {isMobileMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
           </div>
         </div>
       </div>
 
       <AnimatePresence>
-        {mobileMenuOpen && (
+        {isMobileMenuOpen && (
           <motion.div
-            className="fixed inset-0 z-50 bg-dark-base"
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="sm:hidden"
           >
-            <div className="p-4 flex justify-between items-center border-b border-primary/20">
-              <Logo />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <X className="h-6 w-6" />
-              </Button>
-            </div>
-            <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-5rem)]">
-              {Object.entries(menuItems).map(([category, items]) => (
-                <div key={category} className="space-y-2">
-                  <h3 className="text-white font-medium px-3">{category}</h3>
-                  {items.map((item) => (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start text-light-base/70 hover:text-white"
-                      >
-                        {item.icon}
-                        <span className="ml-2">{item.name}</span>
-                      </Button>
-                    </Link>
-                  ))}
-                </div>
-              ))}
-              {nonDropdownItems.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-light-base/70 hover:text-white"
-                  >
-                    {item.name}
-                  </Button>
-                </Link>
-              ))}
-              {user && dashboardItems.map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-light-base/70 hover:text-white"
-                  >
-                    {item.icon}
-                    <span className="ml-2">{item.name}</span>
-                  </Button>
-                </Link>
-              ))}
-            </div>
-            <div className="p-4 border-t border-primary/20 space-y-2">
-              {user ? (
-                <Button
-                  variant="default"
-                  className="w-full"
-                  onClick={() => {
-                    handleLogout();
-                    setMobileMenuOpen(false);
-                  }}
-                >
-                  Sign Out
-                </Button>
-              ) : (
-                <>
-                  <Link href="/auth">
-                    <Button variant="outline" className="w-full">
-                      Sign In
-                    </Button>
-                  </Link>
-                  <Link href="/auth">
-                    <Button variant="default" className="w-full">
-                      Sign Up
-                    </Button>
-                  </Link>
-                </>
+            <div className="pt-2 pb-3 space-y-1">
+              {menuItems.map((item, index) =>
+                item.children ? renderDropdown(item, index, true) : renderMenuItem(item, index, true)
               )}
+              {dashboardItems.map((item, index) => renderMenuItem(item, index, true))}
+              {nonDropdownItems.map((item, index) => renderMenuItem(item, index, true))}
+              <button
+                onClick={handleLogout}
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+              >
+                <LogOutIcon className="inline-block mr-2 w-4 h-4" /> Sign out
+              </button>
             </div>
           </motion.div>
         )}
@@ -294,5 +168,3 @@ export function Navbar() {
     </nav>
   );
 }
-
-export default Navbar;
