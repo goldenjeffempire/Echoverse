@@ -455,13 +455,13 @@ export function Navbar() {
             {!isAuthenticated && (
               <>
                 <Link
-                  href="/signin"
+                  href="/auth"
                   className="text-gray-300 hover:text-white text-sm"
                 >
                   Sign In
                 </Link>
                 <Link
-                  href="/signup"
+                  href="/auth"
                   className="bg-purple-600 text-white text-sm px-4 py-2 rounded hover:bg-purple-500"
                 >
                   Sign Up
