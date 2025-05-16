@@ -1,0 +1,152 @@
+/* Auth page custom styling to match the screenshot design */
+
+.auth-input {
+  background-color: rgba(31, 31, 35, 0.85) !important;
+  border-color: rgba(75, 75, 85, 0.5) !important;
+  color: #fff !important;
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease-in-out;
+}
+
+.auth-input:focus, .auth-input:hover {
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.3) !important;
+}
+
+.auth-input::placeholder {
+  color: rgba(156, 163, 175, 0.7);
+}
+
+.auth-button {
+  background: linear-gradient(135deg, #7c3aed 0%, #6025c0 100%) !important;
+  border: none !important;
+  transition: all 0.3s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: all 0.5s ease;
+}
+
+.auth-button:hover::before {
+  left: 100%;
+}
+
+.auth-button:hover {
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.5) !important;
+  transform: translateY(-1px);
+}
+
+.auth-button:active {
+  transform: translateY(1px);
+}
+
+.auth-tabs [data-state="active"] {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+  border-color: #7c3aed;
+}
+
+.auth-tabs [data-state="inactive"] {
+  color: #9ca3af;
+}
+
+.auth-card {
+  background-color: rgba(17, 17, 23, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  border-color: rgba(75, 75, 85, 0.3) !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.auth-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 25px 45px rgba(0, 0, 0, 0.5) !important;
+}
+
+.auth-hero {
+  background: linear-gradient(135deg, rgba(31, 31, 35, 0.7) 0%, rgba(17, 17, 23, 0.9) 100%);
+  backdrop-filter: blur(10px);
+  border-color: rgba(75, 75, 85, 0.3);
+}
+
+/* Animated glowing effect for input focus */
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 5px rgba(124, 58, 237, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(124, 58, 237, 0.5);
+  }
+}
+
+.auth-input:focus {
+  animation: glow 2s infinite;
+}
+
+/* Checkbox custom styling */
+.auth-checkbox {
+  border-color: rgba(75, 75, 85, 0.5) !important;
+  background-color: rgba(31, 31, 35, 0.85) !important;
+}
+
+.auth-checkbox:checked {
+  background-color: #7c3aed !important;
+  border-color: #7c3aed !important;
+}
+
+/* Logo animation */
+.logo-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+/* Social login buttons */
+.social-login-button {
+  background-color: rgba(31, 31, 35, 0.85) !important;
+  border: 1px solid rgba(75, 75, 85, 0.5) !important;
+  transition: all 0.2s ease-in-out;
+}
+
+.social-login-button:hover {
+  background-color: rgba(41, 41, 45, 0.95) !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
+  transform: translateY(-2px);
+}
+
+/* Date picker overrides */
+.auth-date-picker {
+  background-color: rgba(31, 31, 35, 0.85) !important;
+  border-color: rgba(75, 75, 85, 0.5) !important;
+}
+
+.auth-date-picker button:focus {
+  color: #7c3aed !important;
+}
+
+.auth-date-picker [data-state="selected"] {
+  background-color: #7c3aed !important;
+  color: white !important;
+}
