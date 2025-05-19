@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useLocation, Link } from 'wouter';
 import { useSidebar } from "./SidebarContext";
 import {
-  Sidebar,
   Sidebar as SidebarContainer,
   SidebarProvider,
   SidebarHeader,

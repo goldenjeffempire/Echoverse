@@ -56,9 +56,9 @@ const ProtectedRoute = ({ component: Component, children, ...rest }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const user = localStorage.getItem('user');
+    const user = localStorage.getItem("user");
     if (!user) {
-      setLocation('/login');
+      setLocation("/login");
     } else {
       setIsAuthenticated(true);
     }
@@ -68,12 +68,19 @@ const ProtectedRoute = ({ component: Component, children, ...rest }) => {
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" aria-label="Loading" />
+        <div
+          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
+          aria-label="Loading"
+        />
       </div>
     );
   }
 
-  return isAuthenticated ? (Component ? <Component {...rest} /> : children) : null;
+  return isAuthenticated
+    ? Component
+      ? <Component {...rest} />
+      : children
+    : null;
 };
 
 function GlobalErrorHandler() {
@@ -82,19 +89,27 @@ function GlobalErrorHandler() {
   useEffect(() => {
     const handleUnhandledRejection = (event) => {
       event.preventDefault();
-      toast({ title: "Error", description: event.reason?.message || "Unexpected error", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: event.reason?.message || "Unexpected error",
+        variant: "destructive",
+      });
     };
 
     const handleError = (event) => {
-      toast({ title: "Error", description: event.error?.message || "Unexpected error", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: event.error?.message || "Unexpected error",
+        variant: "destructive",
+      });
     };
 
-    window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    window.addEventListener('error', handleError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+    window.addEventListener("error", handleError);
 
     return () => {
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      window.removeEventListener('error', handleError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+      window.removeEventListener("error", handleError);
     };
   }, [toast]);
 
@@ -109,7 +124,7 @@ function AIChatbotWrapper() {
 
 export default function App() {
   const [location] = useLocation();
-  const isAuthPage = location === '/login' || location === '/signup';
+  const isAuthPage = location === "/login" || location === "/signup";
 
   return (
     <StrictMode>
@@ -126,38 +141,38 @@ export default function App() {
                       <Route component={NotFound} />
                     </Switch>
                   ) : (
-                  <SidebarProvider>  
-                    <DashboardLayout>
-                      <Switch>
-                        <Route path="/" component={() => <ProtectedRoute component={WorkDashboard} />} />
-                        <Route path="/dashboard/work" component={() => <ProtectedRoute component={WorkDashboard} />} />
-                        <Route path="/dashboard/personal" component={() => <ProtectedRoute component={PersonalDashboard} />} />
-                        <Route path="/dashboard/school" component={() => <ProtectedRoute component={SchoolDashboard} />} />
-                        <Route path="/dashboard/general" component={() => <ProtectedRoute component={GeneralDashboard} />} />
-                        <Route path="/education/lessons" component={() => <ProtectedRoute component={LessonBuilder} />} />
-                        <Route path="/education/classroom" component={() => <ProtectedRoute component={ClassroomManager} />} />
-                        <Route path="/work/kanban" component={() => <ProtectedRoute component={KanbanBoard} />} />
-                        <Route path="/developer/plugins" component={() => <ProtectedRoute component={PluginMarketplace} />} />
-                        <Route path="/developer/api-keys" component={() => <ProtectedRoute component={ApiKeyManager} />} />
-                        <Route path="/scheduling/booking" component={() => <ProtectedRoute component={BookingSystem} />} />
-                        <Route path="/marketplace/books" component={() => <ProtectedRoute component={BookMarketplace} />} />
-                        <Route path="/hosting/domains" component={() => <ProtectedRoute component={DomainManager} />} />
-                        <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
-                        <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
-                        <Route path="/modules" component={() => <ProtectedRoute component={ModulesPage} />} />
-                        <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
-                        <Route path="/checkout" component={() => <ProtectedRoute component={Checkout} />} />
-                        <Route path="/auth" component={AuthPage} />
-                        <Route path="/branding" component={BrandingPage} />
-                        <Route path="/marketplace" component={MarketplacePage} />
-                        <Route path="/dashboard" component={() => <ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                        <Route path="/subscriptions" component={() => <ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
-                        <Route path="/cart" component={() => <ProtectedRoute><CartPage /></ProtectedRoute>} />
-                        <Route path="/help" component={HelpCenterPage} />
-                        <Route component={NotFound} />
-                      </Switch>
-                    </DashboardLayout>
-                  <SidebarProvider>
+                    <SidebarProvider>
+                      <DashboardLayout>
+                        <Switch>
+                          <Route path="/" component={() => <ProtectedRoute component={WorkDashboard} />} />
+                          <Route path="/dashboard/work" component={() => <ProtectedRoute component={WorkDashboard} />} />
+                          <Route path="/dashboard/personal" component={() => <ProtectedRoute component={PersonalDashboard} />} />
+                          <Route path="/dashboard/school" component={() => <ProtectedRoute component={SchoolDashboard} />} />
+                          <Route path="/dashboard/general" component={() => <ProtectedRoute component={GeneralDashboard} />} />
+                          <Route path="/education/lessons" component={() => <ProtectedRoute component={LessonBuilder} />} />
+                          <Route path="/education/classroom" component={() => <ProtectedRoute component={ClassroomManager} />} />
+                          <Route path="/work/kanban" component={() => <ProtectedRoute component={KanbanBoard} />} />
+                          <Route path="/developer/plugins" component={() => <ProtectedRoute component={PluginMarketplace} />} />
+                          <Route path="/developer/api-keys" component={() => <ProtectedRoute component={ApiKeyManager} />} />
+                          <Route path="/scheduling/booking" component={() => <ProtectedRoute component={BookingSystem} />} />
+                          <Route path="/marketplace/books" component={() => <ProtectedRoute component={BookMarketplace} />} />
+                          <Route path="/hosting/domains" component={() => <ProtectedRoute component={DomainManager} />} />
+                          <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
+                          <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
+                          <Route path="/modules" component={() => <ProtectedRoute component={ModulesPage} />} />
+                          <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+                          <Route path="/checkout" component={() => <ProtectedRoute component={Checkout} />} />
+                          <Route path="/auth" component={AuthPage} />
+                          <Route path="/branding" component={BrandingPage} />
+                          <Route path="/marketplace" component={MarketplacePage} />
+                          <Route path="/dashboard" component={() => <ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                          <Route path="/subscriptions" component={() => <ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
+                          <Route path="/cart" component={() => <ProtectedRoute><CartPage /></ProtectedRoute>} />
+                          <Route path="/help" component={HelpCenterPage} />
+                          <Route component={NotFound} />
+                        </Switch>
+                      </DashboardLayout>
+                    </SidebarProvider>
                   )}
                 </Router>
                 <Toaster />
