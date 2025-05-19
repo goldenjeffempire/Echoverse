@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import TopNavBar from './TopNavBar';
+import TopNavBar from './navbar';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;

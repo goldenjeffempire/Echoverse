@@ -18,8 +18,8 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Checkout from "@/pages/checkout";
 import HomePage from "@/pages/home-page";
-import AuthPage from "@/pages/auth-page";
-import DashboardPage from "@/pages/dashboard-page";
+// import AuthPage from "@/pages/auth-page";
+// import DashboardPage from "@/pages/dashboard-page";
 import SettingsPage from "@/pages/settings-page";
 import CheckoutPage from "@/pages/checkout-page";
 import ProfilePage from "@/pages/profile-page";
@@ -49,8 +49,15 @@ import Notifications from "@/pages/notifications";
 import Profile from "@/pages/profile";
 import Settings from "@/pages/settings";
 
-// Protected Route
-const ProtectedRoute = ({ component: Component, children, ...rest }) => {
+// Protected Route wrapper component
+const ProtectedRoute = ({
+  component: Component,
+  children,
+  ...rest
+}: {
+  component?: React.ComponentType<any>;
+  children?: React.ReactNode;
+}) => {
   const [, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,27 +86,28 @@ const ProtectedRoute = ({ component: Component, children, ...rest }) => {
   return isAuthenticated
     ? Component
       ? <Component {...rest} />
-      : children
+      : <>{children}</>
     : null;
 };
 
+// Global error handler to catch unhandled errors and rejections
 function GlobalErrorHandler() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const handleUnhandledRejection = (event) => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       event.preventDefault();
       toast({
         title: "Error",
-        description: event.reason?.message || "Unexpected error",
+        description: event.reason?.message || "Unexpected error occurred.",
         variant: "destructive",
       });
     };
 
-    const handleError = (event) => {
+    const handleError = (event: ErrorEvent) => {
       toast({
         title: "Error",
-        description: event.error?.message || "Unexpected error",
+        description: event.error?.message || "Unexpected error occurred.",
         variant: "destructive",
       });
     };
@@ -116,15 +124,16 @@ function GlobalErrorHandler() {
   return null;
 }
 
+// AI Chat Widget visibility controller
 function AIChatbotWrapper() {
   const [location] = useLocation();
-  const hideChatbotOnRoutes = ["/auth"];
+  const hideChatbotOnRoutes = ["/auth", "/login", "/signup"];
   return hideChatbotOnRoutes.includes(location) ? null : <AIChatWidget />;
 }
 
 export default function App() {
   const [location] = useLocation();
-  const isAuthPage = location === "/login" || location === "/signup";
+  const isAuthPage = ["/login", "/signup"].includes(location);
 
   return (
     <StrictMode>
@@ -144,24 +153,39 @@ export default function App() {
                     <SidebarProvider>
                       <DashboardLayout>
                         <Switch>
+                          {/* Dashboard Routes */}
                           <Route path="/" component={() => <ProtectedRoute component={WorkDashboard} />} />
                           <Route path="/dashboard/work" component={() => <ProtectedRoute component={WorkDashboard} />} />
                           <Route path="/dashboard/personal" component={() => <ProtectedRoute component={PersonalDashboard} />} />
                           <Route path="/dashboard/school" component={() => <ProtectedRoute component={SchoolDashboard} />} />
                           <Route path="/dashboard/general" component={() => <ProtectedRoute component={GeneralDashboard} />} />
+
+                          {/* Education */}
                           <Route path="/education/lessons" component={() => <ProtectedRoute component={LessonBuilder} />} />
                           <Route path="/education/classroom" component={() => <ProtectedRoute component={ClassroomManager} />} />
+
+                          {/* Work */}
                           <Route path="/work/kanban" component={() => <ProtectedRoute component={KanbanBoard} />} />
+
+                          {/* Developer */}
                           <Route path="/developer/plugins" component={() => <ProtectedRoute component={PluginMarketplace} />} />
                           <Route path="/developer/api-keys" component={() => <ProtectedRoute component={ApiKeyManager} />} />
+
+                          {/* Scheduling */}
                           <Route path="/scheduling/booking" component={() => <ProtectedRoute component={BookingSystem} />} />
+
+                          {/* Marketplace */}
                           <Route path="/marketplace/books" component={() => <ProtectedRoute component={BookMarketplace} />} />
                           <Route path="/hosting/domains" component={() => <ProtectedRoute component={DomainManager} />} />
+
+                          {/* User */}
                           <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
                           <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
                           <Route path="/modules" component={() => <ProtectedRoute component={ModulesPage} />} />
                           <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
                           <Route path="/checkout" component={() => <ProtectedRoute component={Checkout} />} />
+
+                          {/* Misc */}
                           <Route path="/auth" component={AuthPage} />
                           <Route path="/branding" component={BrandingPage} />
                           <Route path="/marketplace" component={MarketplacePage} />
