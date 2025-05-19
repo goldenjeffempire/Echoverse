@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useLocation, Link } from 'wouter';
+import { useSidebar } from "./SidebarContext";
 import {
+  Sidebar,
   Sidebar as SidebarContainer,
+  SidebarProvider,
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
@@ -17,7 +20,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   const toggleCollapse = () => setCollapsed(!collapsed);
-
+  const { isSidebarOpen, toggleSidebar } = useSidebar();
   const NavLink = ({ href, icon, label, badge }: { href: string; icon: string; label: string; badge?: number }) => {
     const isActive = location === href;
 

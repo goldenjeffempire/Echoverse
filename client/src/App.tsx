@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { AIChatWidget } from "@/components/chat/ai-chat-widget";
+import { SidebarProvider } from "@/components/layout/SidebarContext";
 
 // Layouts & Pages
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -125,6 +126,7 @@ export default function App() {
                       <Route component={NotFound} />
                     </Switch>
                   ) : (
+                  <SidebarProvider>  
                     <DashboardLayout>
                       <Switch>
                         <Route path="/" component={() => <ProtectedRoute component={WorkDashboard} />} />
@@ -155,6 +157,7 @@ export default function App() {
                         <Route component={NotFound} />
                       </Switch>
                     </DashboardLayout>
+                  <SidebarProvider>
                   )}
                 </Router>
                 <Toaster />
