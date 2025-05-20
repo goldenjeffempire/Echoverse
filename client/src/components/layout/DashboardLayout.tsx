@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
-import TopNavBar from './navbar';
+import Navbar from './navbar';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -78,7 +78,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopNavBar />
+        <Navbar />
         <main className="flex-1 overflow-auto bg-neutral-100 dark:bg-neutral-900 p-4 md:p-6">
           {children}
         </main>

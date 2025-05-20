@@ -18,7 +18,7 @@ import Login from "@/pages/login";
 import Signup from "@/pages/signup";
 import Checkout from "@/pages/checkout";
 import HomePage from "@/pages/home-page";
-// import AuthPage from "@/pages/auth-page";
+import AuthPage from "@/pages/auth-page";
 // import DashboardPage from "@/pages/dashboard-page";
 import SettingsPage from "@/pages/settings-page";
 import CheckoutPage from "@/pages/checkout-page";
