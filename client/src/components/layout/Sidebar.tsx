@@ -1,11 +1,8 @@
-// Sidebar.tsx
-
 import React, { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useSidebar } from "./SidebarContext";
 import {
   Sidebar as SidebarContainer,
-  SidebarProvider,
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
@@ -29,13 +26,13 @@ const NavLink: React.FC<NavLinkProps> = ({ href, icon, label, badge }) => {
 
   return (
     <SidebarNavItem>
-      <Link href={href}>
+      <Link href={href} aria-current={isActive ? "page" : undefined}>
         <a
           className={cn(
             "sidebar-item flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 hover:bg-neutral-100 dark:hover:bg-neutral-700",
             isActive && "active border-l-4 border-primary bg-opacity-10 dark:bg-opacity-20"
           )}
-          aria-current={isActive ? "page" : undefined}
+          tabIndex={0}
         >
           <span
             className={cn(
@@ -46,8 +43,8 @@ const NavLink: React.FC<NavLinkProps> = ({ href, icon, label, badge }) => {
           >
             {icon}
           </span>
-          <span className="flex-grow">{label}</span>
-          {badge !== undefined && badge > 0 && (
+          <span className="flex-grow truncate">{label}</span>
+          {badge && badge > 0 && (
             <span className="ml-auto bg-primary-500 text-white text-xs px-1.5 py-0.5 rounded-full select-none">
               {badge}
             </span>
@@ -65,10 +62,16 @@ export default function Sidebar() {
   const toggleCollapse = () => setCollapsed((prev) => !prev);
 
   return (
-    <SidebarContainer className={collapsed ? "w-16" : "w-64"}>
+    <SidebarContainer
+      className={cn("transition-width duration-300 ease-in-out", collapsed ? "w-16" : "w-64")}
+      aria-expanded={!collapsed}
+    >
       <SidebarHeader className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
         <div className="flex items-center space-x-2">
-          <div className="h-8 w-8 rounded-md bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white font-bold text-lg select-none">
+          <div
+            className="h-8 w-8 rounded-md bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white font-bold text-lg select-none"
+            aria-label="Echoverse logo"
+          >
             E
           </div>
           {!collapsed && <span className="font-bold text-lg select-none">Echoverse</span>}
@@ -92,8 +95,8 @@ export default function Sidebar() {
             className="h-10 w-10 rounded-full object-cover select-none"
             loading="lazy"
           />
-          <div className="flex flex-col leading-tight">
-            <p className="font-medium text-neutral-900 dark:text-neutral-100 select-text">Alex Morgan</p>
+          <div className="flex flex-col leading-tight overflow-hidden">
+            <p className="font-medium text-neutral-900 dark:text-neutral-100 truncate select-text">Alex Morgan</p>
             <div className="flex items-center space-x-1">
               <span className="text-xs text-neutral-500 dark:text-neutral-400 select-text">Work Account</span>
               <span className="inline-block h-4 px-1.5 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 text-[10px] font-medium rounded select-text">
@@ -138,6 +141,7 @@ export default function Sidebar() {
         <Link
           href="/settings"
           className="flex items-center space-x-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-primary-500 dark:hover:text-primary-400 select-none"
+          aria-label="Settings"
         >
           <span className="material-icons text-sm" aria-hidden="true">
             settings

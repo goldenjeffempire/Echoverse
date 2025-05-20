@@ -1,5 +1,3 @@
-// SidebarContext.tsx
-
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 interface SidebarContextType {
@@ -16,21 +14,22 @@ interface SidebarProviderProps {
 }
 
 export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) => {
+  // Initialize sidebar state from localStorage or default to true (open)
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    // Try to read persisted state from localStorage for user preference persistence
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("sidebarOpen");
-      return saved ? JSON.parse(saved) : true; // default open
+      return saved !== null ? JSON.parse(saved) : true;
     }
-    return true; // server-side fallback
+    return true; // fallback for SSR
   });
 
+  // Persist the sidebar state whenever it changes
   useEffect(() => {
-    // Persist sidebar open state so user preference sticks
     localStorage.setItem("sidebarOpen", JSON.stringify(isSidebarOpen));
   }, [isSidebarOpen]);
 
-  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+  // Action handlers
+  const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
   const openSidebar = () => setIsSidebarOpen(true);
   const closeSidebar = () => setIsSidebarOpen(false);
 
