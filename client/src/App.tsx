@@ -16,10 +16,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
-import Checkout from "@/pages/checkout";
 import HomePage from "@/pages/home-page";
-import AuthPage from "@/pages/auth-page";
-// import DashboardPage from "@/pages/dashboard-page";
 import SettingsPage from "@/pages/settings-page";
 import CheckoutPage from "@/pages/checkout-page";
 import ProfilePage from "@/pages/profile-page";
@@ -46,8 +43,6 @@ import { DomainManager } from "@/components/hosting/DomainManager";
 // Custom Pages
 import ModulesPage from "@/pages/modules";
 import Notifications from "@/pages/notifications";
-import Profile from "@/pages/profile";
-import Settings from "@/pages/settings";
 
 // Protected Route wrapper component
 const ProtectedRoute = ({
