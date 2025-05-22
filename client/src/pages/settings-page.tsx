@@ -1,419 +1,608 @@
-import { useAuth } from "@/hooks/use-auth";
-import { Helmet } from "react-helmet";
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+"use client";
+
+import React, { useState, useEffect, FormEvent } from "react";
 import { motion } from "framer-motion";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { User, Settings, Lock, Bell, Shield, LogOut, Loader2 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import {
+  User,
+  Lock,
+  Bell,
+  Shield,
+  LogOut,
+  Loader2,
+  Copy,
+  Check,
+  AlertCircle,
+} from "lucide-react";
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter,
+  Button,
+  Input,
+  Label,
+  Switch,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui";
+
+import { toast } from "@/lib/toast";
+
+interface UserData {
+  username: string;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  bio: string;
+}
+
+// --- Mock API service functions (replace with real backend calls) ---
+async function apiLogout(): Promise<void> {
+  await new Promise((r) => setTimeout(r, 1000));
+  // Implement real logout here
+}
+
+async function apiGetUserProfile(): Promise<UserData> {
+  await new Promise((r) => setTimeout(r, 1000));
+  return {
+    username: "jeffery_dev",
+    email: "jeffery@example.com",
+    firstName: "Jeffery",
+    lastName: "Smith",
+    bio: "Hard working and love being the best out of all in my work.",
+  };
+}
+
+async function apiUpdateProfile(data: Partial<UserData>): Promise<UserData> {
+  await new Promise((r) => setTimeout(r, 1200));
+  // Normally returns updated user data
+  return { ...data } as UserData;
+}
+
+async function apiChangePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  await new Promise((r) => setTimeout(r, 1200));
+  // Simulate failure for wrong password
+  if (currentPassword !== "correct_password") {
+    throw new Error("Current password is incorrect");
+  }
+}
+
+async function apiUpdateNotificationSettings(
+  settings: Record<string, boolean>
+): Promise<void> {
+  await new Promise((r) => setTimeout(r, 1000));
+}
+
+async function apiGetApiKey(): Promise<string> {
+  await new Promise((r) => setTimeout(r, 1000));
+  return "ABCD-1234-EFGH-5678-IJKL";
+}
+
+async function apiRegenerateApiKey(): Promise<string> {
+  await new Promise((r) => setTimeout(r, 1500));
+  // Generate new key (random string)
+  return Math.random().toString(36).substring(2, 18).toUpperCase();
+}
+
+async function apiGetApiUsage(): Promise<{ used: number; limit: number }> {
+  await new Promise((r) => setTimeout(r, 800));
+  return { used: 1235, limit: 10000 };
+}
+
+// ---------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { user, isLoading, logoutMutation } = useAuth();
-  const { toast } = useToast();
-  const [isUpdating, setIsUpdating] = useState(false);
-  
-  // Loading state
-  if (isLoading) {
+  // --- States ---
+  const [user, setUser] = useState<UserData | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [errorProfile, setErrorProfile] = useState<string | null>(null);
+
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+
+  const [notifications, setNotifications] = useState({
+    emailNotifications: true,
+    productUpdates: true,
+    billingAlerts: true,
+    aiInsights: false,
+  });
+  const [notifSaving, setNotifSaving] = useState(false);
+
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKeyLoading, setApiKeyLoading] = useState(true);
+  const [apiKeyRegenerating, setApiKeyRegenerating] = useState(false);
+
+  const [apiUsage, setApiUsage] = useState<{ used: number; limit: number }>({
+    used: 0,
+    limit: 0,
+  });
+  const [apiUsageLoading, setApiUsageLoading] = useState(true);
+
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Password form error
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // --- Effects ---
+
+  useEffect(() => {
+    // Load user profile on mount
+    async function loadProfile() {
+      try {
+        setErrorProfile(null);
+        setLoadingProfile(true);
+        const profile = await apiGetUserProfile();
+        setUser(profile);
+      } catch (err) {
+        setErrorProfile("Failed to load profile");
+      } finally {
+        setLoadingProfile(false);
+      }
+    }
+    loadProfile();
+
+    // Load API key & usage
+    async function loadApiInfo() {
+      try {
+        setApiKeyLoading(true);
+        setApiUsageLoading(true);
+        const [key, usage] = await Promise.all([apiGetApiKey(), apiGetApiUsage()]);
+        setApiKey(key);
+        setApiUsage(usage);
+      } catch {
+        toast({ title: "Error", description: "Failed to load API info" });
+      } finally {
+        setApiKeyLoading(false);
+        setApiUsageLoading(false);
+      }
+    }
+    loadApiInfo();
+  }, []);
+
+  // --- Handlers ---
+
+  async function handleLogout() {
+    try {
+      setLogoutLoading(true);
+      await apiLogout();
+      toast({ title: "Logged out", description: "You have signed out." });
+      // Redirect or reload page here as needed
+    } catch {
+      toast({ title: "Error", description: "Logout failed." });
+    } finally {
+      setLogoutLoading(false);
+    }
+  }
+
+  async function handleUpdateProfile(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!user) return;
+
+    const form = e.currentTarget;
+    const email = (form.elements.namedItem("email") as HTMLInputElement).value.trim();
+    const firstName = (form.elements.namedItem("firstName") as HTMLInputElement).value.trim();
+    const lastName = (form.elements.namedItem("lastName") as HTMLInputElement).value.trim();
+    const bio = (form.elements.namedItem("bio") as HTMLTextAreaElement).value.trim();
+
+    setUpdatingProfile(true);
+    try {
+      const updated = await apiUpdateProfile({ email, firstName, lastName, bio });
+      setUser((prev) => (prev ? { ...prev, ...updated } : updated));
+      toast({ title: "Success", description: "Profile updated." });
+    } catch {
+      toast({ title: "Error", description: "Failed to update profile." });
+    } finally {
+      setUpdatingProfile(false);
+    }
+  }
+
+  async function handleChangePassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPasswordError(null);
+
+    const form = e.currentTarget;
+    const currentPassword = (form.elements.namedItem(
+      "currentPassword"
+    ) as HTMLInputElement).value;
+    const newPassword = (form.elements.namedItem("newPassword") as HTMLInputElement)
+      .value;
+    const confirmPassword = (form.elements.namedItem(
+      "confirmPassword"
+    ) as HTMLInputElement).value;
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await apiChangePassword(currentPassword, newPassword);
+      toast({ title: "Success", description: "Password changed." });
+      form.reset();
+    } catch (err: any) {
+      setPasswordError(err.message || "Failed to change password.");
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
+  async function handleToggleNotification(key: keyof typeof notifications) {
+    setNotifications((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      // Save immediately or batch later, here immediate save
+      saveNotificationSettings(updated);
+      return updated;
+    });
+  }
+
+  async function saveNotificationSettings(updatedSettings: typeof notifications) {
+    setNotifSaving(true);
+    try {
+      await apiUpdateNotificationSettings(updatedSettings);
+      toast({ title: "Success", description: "Notification settings updated." });
+    } catch {
+      toast({ title: "Error", description: "Failed to update notification settings." });
+    } finally {
+      setNotifSaving(false);
+    }
+  }
+
+  async function handleRegenerateApiKey() {
+    setApiKeyRegenerating(true);
+    try {
+      const newKey = await apiRegenerateApiKey();
+      setApiKey(newKey);
+      toast({ title: "Success", description: "API key regenerated." });
+    } catch {
+      toast({ title: "Error", description: "Failed to regenerate API key." });
+    } finally {
+      setApiKeyRegenerating(false);
+    }
+  }
+
+  async function handleCopyApiKey() {
+    if (!apiKey) return;
+    try {
+      await navigator.clipboard.writeText(apiKey);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+      toast({ title: "Copied", description: "API key copied to clipboard." });
+    } catch {
+      toast({ title: "Error", description: "Failed to copy API key." });
+    }
+  }
+
+  if (loadingProfile)
     return (
-      <div className="min-h-screen bg-mesh flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+      <div className="flex justify-center items-center h-screen text-white text-lg">
+        Loading profile...
       </div>
     );
-  }
-  
-  // If still checking auth or user is null, don't render main content
-  if (!user) return null;
-  
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdating(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Profile Updated",
-        description: "Your profile information has been updated successfully.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update profile. Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-  
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdating(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Password Changed",
-        description: "Your password has been updated successfully.",
-      });
-      
-      // Reset form
-      (e.target as HTMLFormElement).reset();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to change password. Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-  
-  const handleLogout = () => {
-    logoutMutation.mutate();
-  };
-  
+
+  if (errorProfile)
+    return (
+      <div className="flex justify-center items-center h-screen text-red-500 text-lg">
+        {errorProfile}
+      </div>
+    );
+
   return (
-    <>
-      <Helmet>
-        <title>Account Settings - Echoverse</title>
-        <meta name="description" content="Manage your Echoverse account settings and preferences" />
-      </Helmet>
-      
-      <div className="min-h-screen bg-dark-base">
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="mb-8">
-            <div className="flex space-x-2 mb-4">
-              <Link href="/dashboard">
-                <Button variant="ghost" size="sm">
-                  ← Back to Dashboard
-                </Button>
-              </Link>
-              <Link href="/profile">
-                <Button variant="ghost" size="sm">
-                  View Profile
-                </Button>
-              </Link>
-            </div>
-            <h1 className="text-3xl font-bold text-white">Account Settings</h1>
-            <p className="text-light-base/70 mt-2">Manage your account settings and preferences</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {/* Sidebar */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5 }}
-              className="hidden md:block"
-            >
-              <Card className="bg-dark-card border-primary/20">
-                <CardContent className="p-4">
-                  <div className="space-y-1 py-2">
-                    <h3 className="text-sm font-medium text-light-base/70">Settings</h3>
-                    <ul className="space-y-1 text-sm">
-                      {[
-                        { icon: <User size={16} />, label: "Profile", href: "#profile" },
-                        { icon: <Lock size={16} />, label: "Password", href: "#security" },
-                        { icon: <Bell size={16} />, label: "Notifications", href: "#notifications" },
-                        { icon: <Shield size={16} />, label: "API Access", href: "#api" },
-                      ].map((item, i) => (
-                        <li key={i}>
-                          <a 
-                            href={item.href} 
-                            className="flex items-center gap-2 p-2 rounded-md hover:bg-primary/10 text-light-base/80 hover:text-white transition-colors"
-                          >
-                            {item.icon}
-                            <span>{item.label}</span>
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  
-                  <div className="pt-4 mt-4 border-t border-primary/10">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={handleLogout}
-                      disabled={logoutMutation.isPending}
-                    >
-                      {logoutMutation.isPending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <LogOut className="mr-2 h-4 w-4" />
-                      )}
-                      Sign out
-                    </Button>
+    <div className="flex flex-col md:flex-row gap-6 p-6 max-w-7xl mx-auto text-gray-900">
+      {/* Sidebar */}
+      <aside className="w-full md:w-1/4 bg-gray-50 rounded-lg p-4 shadow">
+        <div className="flex flex-col items-center">
+          <User className="text-primary w-12 h-12" />
+          <h2 className="mt-2 text-xl font-semibold">{user?.username}</h2>
+          <p className="text-sm text-gray-600">{user?.email ?? "No email set"}</p>
+          <button
+            className="mt-4 w-full bg-red-600 text-white py-2 rounded hover:bg-red-700 transition"
+            onClick={handleLogout}
+            disabled={logoutLoading}
+          >
+            {logoutLoading ? (
+              <Loader2 className="animate-spin mr-2 inline-block w-5 h-5" />
+            ) : (
+              <LogOut className="inline-block mr-2 w-5 h-5" />
+            )}
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex-1 bg-white rounded-lg shadow p-6">
+        <Tabs defaultValue="profile" className="w-full">
+          <TabsList>
+            <TabsTrigger value="profile" className="flex items-center gap-2">
+              <User /> Profile
+            </TabsTrigger>
+            <TabsTrigger value="password" className="flex items-center gap-2">
+              <Lock /> Password
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex items-center gap-2">
+              <Bell /> Notifications
+            </TabsTrigger>
+            <TabsTrigger value="security" className="flex items-center gap-2">
+              <Shield /> Security
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Profile tab */}
+          <TabsContent value="profile">
+            <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Profile Information</CardTitle>
+                  <CardDescription>
+                    Update your personal details here.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <Label htmlFor="username">Username</Label>
+                      <Input id="username" value={user?.username} readOnly />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        defaultValue={user?.email ?? ""}
+                        required
+                        autoComplete="email"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="firstName">First Name</Label>
+                      <Input
+                        id="firstName"
+                        name="firstName"
+                        type="text"
+                        defaultValue={user?.firstName ?? ""}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="lastName">Last Name</Label>
+                      <Input
+                        id="lastName"
+                        name="lastName"
+                        type="text"
+                        defaultValue={user?.lastName ?? ""}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="bio">Bio</Label>
+                      <textarea
+                        id="bio"
+                        name="bio"
+                        rows={3}
+                        defaultValue={user?.bio ?? ""}
+                        className="w-full border rounded px-3 py-2 resize-none"
+                      />
+                    </div>
                   </div>
                 </CardContent>
+                <CardFooter>
+                  <Button type="submit" disabled={updatingProfile}>
+                    {updatingProfile ? (
+                      <Loader2 className="animate-spin mr-2 w-5 h-5" />
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </Button>
+                </CardFooter>
               </Card>
-            </motion.div>
-            
-            {/* Main content */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="md:col-span-3"
-            >
-              <Tabs defaultValue="profile" className="space-y-6">
-                <TabsList className="bg-dark-card border border-primary/20">
-                  <TabsTrigger value="profile">Profile</TabsTrigger>
-                  <TabsTrigger value="security">Security</TabsTrigger>
-                  <TabsTrigger value="notifications">Notifications</TabsTrigger>
-                  <TabsTrigger value="api">API Access</TabsTrigger>
-                </TabsList>
-                
-                {/* Profile Tab */}
-                <TabsContent value="profile">
-                  <Card className="bg-dark-card border-primary/20">
-                    <CardHeader>
-                      <CardTitle>Profile Information</CardTitle>
-                      <CardDescription>Update your account information and public profile</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <form onSubmit={handleUpdateProfile} className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="username">Username</Label>
-                            <Input 
-                              id="username" 
-                              defaultValue={user.username} 
-                              className="bg-dark-base/50"
-                              disabled
-                            />
-                            <p className="text-xs text-light-base/60">Username cannot be changed</p>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="email">Email Address</Label>
-                            <Input 
-                              id="email" 
-                              type="email"
-                              defaultValue={user.email || ""} 
-                              className="bg-dark-base/50"
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="firstName">First Name</Label>
-                            <Input 
-                              id="firstName" 
-                              className="bg-dark-base/50"
-                              placeholder="Enter your first name"
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="lastName">Last Name</Label>
-                            <Input 
-                              id="lastName" 
-                              className="bg-dark-base/50"
-                              placeholder="Enter your last name"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="bio">Bio</Label>
-                          <textarea 
-                            id="bio" 
-                            rows={4}
-                            className="w-full rounded-md border border-input bg-dark-base/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            placeholder="Tell us about yourself"
-                          />
-                        </div>
-                        
-                        <div className="flex justify-end">
-                          <Button type="submit" disabled={isUpdating}>
-                            {isUpdating ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              'Save Changes'
-                            )}
-                          </Button>
-                        </div>
-                      </form>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                
-                {/* Security Tab */}
-                <TabsContent value="security">
-                  <Card className="bg-dark-card border-primary/20">
-                    <CardHeader>
-                      <CardTitle>Password</CardTitle>
-                      <CardDescription>Update your password to keep your account secure</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <form onSubmit={handleChangePassword} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="currentPassword">Current Password</Label>
-                          <Input 
-                            id="currentPassword" 
-                            type="password"
-                            className="bg-dark-base/50"
-                            required
-                          />
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="newPassword">New Password</Label>
-                            <Input 
-                              id="newPassword" 
-                              type="password"
-                              className="bg-dark-base/50"
-                              required
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                            <Input 
-                              id="confirmPassword" 
-                              type="password"
-                              className="bg-dark-base/50"
-                              required
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-end">
-                          <Button type="submit" disabled={isUpdating}>
-                            {isUpdating ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Updating...
-                              </>
-                            ) : (
-                              'Update Password'
-                            )}
-                          </Button>
-                        </div>
-                      </form>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                
-                {/* Notifications Tab */}
-                <TabsContent value="notifications">
-                  <Card className="bg-dark-card border-primary/20">
-                    <CardHeader>
-                      <CardTitle>Notification Preferences</CardTitle>
-                      <CardDescription>Configure how you want to receive notifications</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {[
-                          { title: "Email Notifications", description: "Receive notifications via email" },
-                          { title: "Product Updates", description: "Get notified about new features and updates" },
-                          { title: "Billing Alerts", description: "Receive alerts about your billing and subscription" },
-                          { title: "AI Insights", description: "Get personalized AI insights and recommendations" },
-                        ].map((item, i) => (
-                          <div key={i} className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-white">{item.title}</p>
-                              <p className="text-sm text-light-base/60">{item.description}</p>
-                            </div>
-                            <Switch defaultChecked={i !== 3} />
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                    <CardFooter className="justify-end">
-                      <Button>Save Preferences</Button>
-                    </CardFooter>
-                  </Card>
-                </TabsContent>
-                
-                {/* API Access Tab */}
-                <TabsContent value="api">
-                  <Card className="bg-dark-card border-primary/20">
-                    <CardHeader>
-                      <CardTitle>API Access</CardTitle>
-                      <CardDescription>Manage your API keys and access tokens</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="rounded-md border border-primary/20 p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h3 className="font-medium text-white">API Key</h3>
-                              <p className="text-xs text-light-base/60">Created on {new Date().toLocaleDateString()}</p>
-                            </div>
-                            <Button variant="outline" size="sm">Regenerate</Button>
-                          </div>
-                          <div className="mt-4">
-                            <div className="relative">
-                              <Input 
-                                type="text"
-                                value="••••••••••••••••••••••••••••••••••••••••••••"
-                                className="bg-dark-base/50 pr-24"
-                                readOnly
-                              />
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="absolute right-1 top-1 h-7"
-                                onClick={() => {
-                                  toast({
-                                    title: "Copied",
-                                    description: "API key copied to clipboard",
-                                  });
-                                }}
-                              >
-                                Copy
-                              </Button>
-                            </div>
-                            <p className="mt-2 text-xs text-warning">Keep your API key secure. Do not share it with others.</p>
-                          </div>
-                        </div>
-                        
-                        <div className="rounded-md border border-primary/20 p-4">
-                          <h3 className="font-medium text-white">API Usage</h3>
-                          <div className="mt-4 space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-light-base/70">Monthly Limit</span>
-                              <span className="text-white">10,000 requests</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-light-base/70">Used This Month</span>
-                              <span className="text-white">1,235 requests</span>
-                            </div>
-                            <div className="h-2 bg-dark-base/60 rounded-full mt-2">
-                              <div className="h-full bg-primary rounded-full" style={{ width: '12%' }}></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                    <CardFooter>
-                      <Link href="#" className="text-primary text-sm">
-                        View API documentation
-                      </Link>
-                    </CardFooter>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            </motion.div>
-          </div>
-        </div>
+            </form>
+          </TabsContent>
+
+          {/* Password tab */}
+          <TabsContent value="password">
+            <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Change Password</CardTitle>
+                  <CardDescription>
+                    Choose a strong, new password.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div>
+                      <Label htmlFor="currentPassword">Current Password</Label>
+                      <Input
+                        id="currentPassword"
+                        name="currentPassword"
+                        type="password"
+                        required
+                        autoComplete="current-password"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="newPassword">New Password</Label>
+                      <Input
+                        id="newPassword"
+                        name="newPassword"
+                        type="password"
+                        required
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        required
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    {passwordError && (
+                      <p className="text-red-600 flex items-center gap-1">
+                        <AlertCircle size={16} /> {passwordError}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button type="submit" disabled={changingPassword}>
+                    {changingPassword ? (
+                      <Loader2 className="animate-spin mr-2 w-5 h-5" />
+                    ) : (
+                      "Change Password"
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </form>
+          </TabsContent>
+
+          {/* Notifications tab */}
+          <TabsContent value="notifications">
+            <Card>
+              <CardHeader>
+                <CardTitle>Notification Settings</CardTitle>
+                <CardDescription>Manage your notifications.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {[
+                  {
+                    key: "emailNotifications",
+                    label: "Email Notifications",
+                    description: "Receive email alerts about your account.",
+                  },
+                  {
+                    key: "productUpdates",
+                    label: "Product Updates",
+                    description: "Stay updated with product news.",
+                  },
+                  {
+                    key: "billingAlerts",
+                    label: "Billing Alerts",
+                    description: "Get alerts on billing and invoices.",
+                  },
+                  {
+                    key: "aiInsights",
+                    label: "AI Insights",
+                    description: "Receive insights powered by AI.",
+                  },
+                ].map(({ key, label, description }) => (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between"
+                  >
+                    <div>
+                      <Label htmlFor={key}>{label}</Label>
+                      <p className="text-sm text-gray-600">{description}</p>
+                    </div>
+                    <Switch
+                      id={key}
+                      checked={notifications[key as keyof typeof notifications]}
+                      onCheckedChange={() =>
+                        handleToggleNotification(key as keyof typeof notifications)
+                      }
+                      disabled={notifSaving}
+                    />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Security tab */}
+          <TabsContent value="security">
+            <Card>
+              <CardHeader>
+                <CardTitle>API Key Management</CardTitle>
+                <CardDescription>
+                  Manage your API key and monitor usage.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col md:flex-row gap-4 items-center">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="apiKey"
+                      type="text"
+                      value={apiKey ?? ""}
+                      readOnly
+                      className="w-64 md:w-80"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyApiKey}
+                      disabled={!apiKey}
+                    >
+                      {copySuccess ? (
+                        <Check className="text-green-600 w-4 h-4" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRegenerateApiKey}
+                    disabled={apiKeyRegenerating}
+                  >
+                    {apiKeyRegenerating ? (
+                      <Loader2 className="animate-spin w-4 h-4 mr-2" />
+                    ) : (
+                      "Regenerate Key"
+                    )}
+                  </Button>
+                </div>
+
+                {/* API Usage Bar */}
+                <div className="mt-6">
+                  <label htmlFor="apiUsage" className="block mb-1 font-medium">
+                    API Usage: {apiUsage.used} / {apiUsage.limit}
+                  </label>
+                  <div
+                    id="apiUsage"
+                    className="w-full h-3 bg-gray-200 rounded-full overflow-hidden"
+                    aria-valuemin={0}
+                    aria-valuemax={apiUsage.limit}
+                    aria-valuenow={apiUsage.used}
+                    role="progressbar"
+                  >
+                    <div
+                      className="h-3 bg-primary rounded-full"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (apiUsage.used / apiUsage.limit) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-    </>
+    </div>
   );
 }

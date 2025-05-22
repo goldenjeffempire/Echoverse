@@ -43,23 +43,22 @@ export default function Signup() {
 
   async function onSubmit(data: SignupFormData) {
     setIsLoading(true);
-    
+
     try {
       const response = await apiRequest('POST', '/api/auth/signup', data);
       const result = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(result.message || 'Failed to create account');
       }
-      
+
       toast({
         title: 'Success',
         description: 'Your account has been created. Please login.',
       });
-      
-      // Redirect to login page
-      setLocation('/login');
-      
+
+      // Redirect to login with success query param to trigger toast there too
+      setLocation('/login?signup=success');
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -170,7 +169,10 @@ export default function Signup() {
         <div className="mt-6 text-center">
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
             Already have an account?{' '}
-            <Link href="/login" className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 font-medium">
+            <Link
+              href="/login"
+              className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
+            >
               Sign in
             </Link>
           </p>

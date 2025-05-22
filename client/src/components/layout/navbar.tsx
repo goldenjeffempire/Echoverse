@@ -40,41 +40,43 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
+import { cn } from "@/lib/utils"; // 🔥 FIXED: Missing import
+
+// 🔁 Menu config moved out of component
+const menuItems = {
+  Product: [
+    { name: "AI Studio", href: "/ai-studio", icon: <Code className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Features", href: "/features", icon: <Rocket className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Projects", href: "/projects", icon: <Box className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Marketplace", href: "/marketplace", icon: <Store className="w-4 h-4" aria-hidden="true" /> },
+  ],
+  Learn: [
+    { name: "Courses", href: "/courses", icon: <BookOpen className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Books", href: "/books", icon: <FileText className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Blog", href: "/blog", icon: <Laptop className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Help Center", href: "/help", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
+  ],
+  Community: [
+    { name: "Team", href: "/team", icon: <Users className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Partners", href: "/partners", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Events", href: "/events", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Contribute", href: "/contribute", icon: <Rocket className="w-4 h-4" aria-hidden="true" /> },
+  ],
+};
 
 export default function Navbar() {
   const { theme, setTheme } = useTheme();
+  const { user, logoutMutation } = useAuth();
+  const [location] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [location] = useLocation();
-  const { user, logoutMutation } = useAuth();
 
   const toggleTheme = () => setTheme(theme === "light" ? "dark" : "light");
-
-  const menuItems = React.useMemo(() => ({
-    Product: [
-      { name: "AI Studio", href: "/ai-studio", icon: <Code className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Features", href: "/features", icon: <Rocket className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Projects", href: "/projects", icon: <Box className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Marketplace", href: "/marketplace", icon: <Store className="w-4 h-4" aria-hidden="true" /> },
-    ],
-    Learn: [
-      { name: "Courses", href: "/courses", icon: <BookOpen className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Books", href: "/books", icon: <FileText className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Blog", href: "/blog", icon: <Laptop className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Help Center", href: "/help", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
-    ],
-    Community: [
-      { name: "Team", href: "/team", icon: <Users className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Partners", href: "/partners", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Events", href: "/events", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
-      { name: "Contribute", href: "/contribute", icon: <Rocket className="w-4 h-4" aria-hidden="true" /> },
-    ],
-  }), []);
 
   return (
     <nav className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 fixed w-full z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
-        {/* Left Section: Logo and Desktop Menu */}
+        {/* Left Section */}
         <div className="flex items-center space-x-4">
           <Link href="/" aria-label="Home">
             <a className="flex items-center space-x-2">
@@ -83,11 +85,11 @@ export default function Navbar() {
             </a>
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Nav */}
           <div className="hidden md:flex space-x-8">
             {Object.entries(menuItems).map(([category, items]) => (
               <NavigationMenu key={category}>
-                <NavigationMenuTrigger>{category}</NavigationMenuTrigger>
+                <NavigationMenuTrigger aria-expanded="false">{category}</NavigationMenuTrigger>
                 <NavigationMenuContent>
                   <NavigationMenuList>
                     {items.map(({ name, href, icon }) => (
@@ -109,7 +111,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Right Section: Theme toggle, Auth Buttons, Mobile Menu */}
+        {/* Right Section */}
         <div className="flex items-center space-x-4">
           {/* Theme Toggle */}
           <Button
@@ -125,17 +127,17 @@ export default function Navbar() {
             )}
           </Button>
 
-          {/* Desktop Auth Controls */}
+          {/* Desktop Auth */}
           {user ? (
             <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
               <DropdownMenuTrigger asChild>
                 <button
-                  aria-label="User menu"
+                  aria-label="User profile dropdown"
                   className="flex items-center rounded-full focus:outline-none focus:ring focus:ring-primary"
                 >
                   <img
                     src={user.avatarUrl || "/default-avatar.png"}
-                    alt={`${user.name}'s avatar`}
+                    alt={`${user?.name || "User"}'s avatar`}
                     className="h-8 w-8 rounded-full object-cover"
                     loading="lazy"
                   />

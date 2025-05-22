@@ -1,3 +1,4 @@
+// client/src/pages/courses-page.tsx
 
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
@@ -87,48 +88,5 @@ export default function CoursesPage() {
         </div>
       </div>
     </DashboardLayout>
-  );
-}
-import { MainLayout } from "@/components/layouts/main-layout";
-import { motion } from "framer-motion";
-import { Card, CardContent } from "@/components/ui/card";
-
-export default function CoursesPage() {
-  const courses = [
-    {
-      title: "AI Development Fundamentals",
-      description: "Learn the basics of AI development",
-      duration: "8 weeks"
-    },
-    {
-      title: "Advanced Machine Learning",
-      description: "Deep dive into machine learning concepts",
-      duration: "12 weeks"
-    }
-  ];
-
-  return (
-    <MainLayout>
-      <div className="container mx-auto px-4 py-16 max-w-7xl">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h1 className="text-4xl font-bold mb-6">Courses</h1>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-            {courses.map((course, index) => (
-              <Card key={index} className="bg-dark-card">
-                <CardContent className="p-6">
-                  <h3 className="text-xl font-semibold mb-2">{course.title}</h3>
-                  <p className="text-light-base/70 mb-4">{course.description}</p>
-                  <p className="text-sm text-primary">Duration: {course.duration}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </motion.div>
-      </div>
-    </MainLayout>
   );
 }

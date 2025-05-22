@@ -1,9 +1,10 @@
+// client/src/pages/course-detail-page.tsx
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useRoute } from "wouter";
+import { Link, useRoute } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowLeft, BookOpen, Clock, Award } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -20,14 +21,30 @@ interface CourseContent {
 export default function CourseDetailPage() {
   const [, params] = useRoute("/courses/:id");
   const [activeTab, setActiveTab] = useState("content");
-  const [progress, setProgress] = useState(30);
 
-  const [content] = useState<CourseContent[]>([
+  const content: CourseContent[] = [
     { id: "1", title: "Introduction to Course", type: "video", duration: "10 min", completed: true },
     { id: "2", title: "Core Concepts", type: "reading", duration: "15 min", completed: true },
     { id: "3", title: "Practical Applications", type: "video", duration: "20 min", completed: false },
     { id: "4", title: "Knowledge Check", type: "quiz", duration: "10 min", completed: false }
-  ]);
+  ];
+
+  // Calculate progress dynamically
+  const completedCount = content.filter(c => c.completed).length;
+  const progress = Math.round((completedCount / content.length) * 100);
+
+  // Find next uncompleted lesson
+  const nextLesson = content.find(c => !c.completed);
+
+  // Handle Continue Learning click
+  const handleContinueLearning = () => {
+    if (!nextLesson) {
+      alert("You have completed all lessons!");
+      return;
+    }
+    // Simulate navigation to lesson (replace with real routing logic)
+    alert(`Continuing to lesson: ${nextLesson.title}`);
+  };
 
   return (
     <DashboardLayout>
@@ -39,7 +56,9 @@ export default function CourseDetailPage() {
         >
           <div className="flex items-center gap-4">
             <Button variant="ghost" asChild>
-              <a href="/courses"><ArrowLeft className="h-4 w-4" /> Back to Courses</a>
+              <Link href="/courses">
+                <ArrowLeft className="h-4 w-4" /> Back to Courses
+              </Link>
             </Button>
           </div>
 
@@ -50,7 +69,9 @@ export default function CourseDetailPage() {
                   <CardTitle className="text-2xl">Course: {params?.id}</CardTitle>
                   <p className="text-muted-foreground mt-2">Master the fundamentals and advanced concepts</p>
                 </div>
-                <Button>Continue Learning</Button>
+                <Button onClick={handleContinueLearning} disabled={!nextLesson}>
+                  {nextLesson ? "Continue Learning" : "Completed"}
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
@@ -63,7 +84,7 @@ export default function CourseDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">12 lessons</span>
+                      <span className="text-sm text-muted-foreground">{content.length} lessons</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Award className="h-4 w-4 text-muted-foreground" />
@@ -96,7 +117,7 @@ export default function CourseDetailPage() {
                             </div>
                             <div className="flex items-center gap-4">
                               <span className="text-sm text-muted-foreground">{item.duration}</span>
-                              <Button variant="outline" size="sm">
+                              <Button variant="outline" size="sm" disabled={!item.completed && item !== nextLesson}>
                                 {item.completed ? "Review" : "Start"}
                               </Button>
                             </div>

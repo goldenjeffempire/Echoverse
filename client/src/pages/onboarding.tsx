@@ -1,10 +1,27 @@
 import React, { useState, useEffect } from "react";
 import { Helmet } from "react-helmet";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { CheckCircle, PlusCircle, Sparkles, Shield, ChevronRight, Users, Building, User, GraduationCap } from "lucide-react";
+import {
+  CheckCircle,
+  PlusCircle,
+  Sparkles,
+  Shield,
+  ChevronRight,
+  Users,
+  Building,
+  User,
+  GraduationCap,
+} from "lucide-react";
 import { UserRole } from "@shared/schema";
 import { motion } from "framer-motion";
 import { Logo } from "@/components/brand/logo";
@@ -22,38 +39,33 @@ interface OnboardingStep {
 export default function Onboarding() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
+
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(0);
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
   const [progress, setProgress] = useState<number>(0);
-  
+
   useEffect(() => {
     if (!user) {
       navigate("/auth");
       return;
     }
-    
-    // Update progress when step changes
-    setProgress((currentStep + 1) * (100 / getStepsForRole(user.role).length));
+    // Calculate and update progress based on current step & total steps
+    const stepsLength = getStepsForRole(user.role).length;
+    setProgress(((currentStep + 1) / stepsLength) * 100);
   }, [user, currentStep, navigate]);
-  
+
   const handleContinue = () => {
-    const roleSteps = getStepsForRole(user?.role || UserRole.GENERAL);
-    
+    if (!user) return; // Just in case
+
+    const roleSteps = getStepsForRole(user.role);
+
     if (currentStep < roleSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
       navigate("/dashboard");
     }
   };
-  
+
   const getStepsForRole = (role: UserRole): OnboardingStep[] => {
     const commonSteps: OnboardingStep[] = [
       {
@@ -61,21 +73,18 @@ export default function Onboarding() {
         description: "Let's get started with your AI workspace",
         icon: <CheckCircle className="h-6 w-6 text-primary" />,
         content: (
-          <div className="space-y-4">
-            <FadeInElement>
-              <h3 className="text-xl font-medium">Welcome to Echoverse, {user?.username}!</h3>
-              <p className="text-gray-400 mt-2">
-                We're excited to help you get started with our AI-powered workspace platform. 
-                Your account has been successfully created, and we'll guide you through 
-                setting up your environment.
-              </p>
-            </FadeInElement>
-          </div>
-        )
-      }
+          <FadeInElement>
+            <h3 className="text-xl font-medium">Welcome to Echoverse, {user?.username}!</h3>
+            <p className="text-gray-400 mt-2">
+              We're excited to help you get started with our AI-powered workspace platform.
+              Your account has been successfully created, and we'll guide you through
+              setting up your environment.
+            </p>
+          </FadeInElement>
+        ),
+      },
     ];
-    
-    // Role-specific steps
+
     const roleSpecificSteps: Record<UserRole, OnboardingStep[]> = {
       [UserRole.GENERAL]: [
         {
@@ -104,7 +113,7 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
+          ),
         },
         {
           title: "AI Preferences",
@@ -134,8 +143,8 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
-        }
+          ),
+        },
       ],
       [UserRole.WORK]: [
         {
@@ -164,7 +173,7 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
+          ),
         },
         {
           title: "Industry Focus",
@@ -194,7 +203,7 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
+          ),
         },
         {
           title: "Team Integration",
@@ -207,8 +216,8 @@ export default function Onboarding() {
                 Connect with your team members and set up collaboration tools for your workspace.
               </p>
             </div>
-          )
-        }
+          ),
+        },
       ],
       [UserRole.SCHOOL]: [
         {
@@ -237,7 +246,7 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
+          ),
         },
         {
           title: "Learning Style",
@@ -267,8 +276,8 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
-        }
+          ),
+        },
       ],
       [UserRole.PERSONAL]: [
         {
@@ -299,11 +308,11 @@ export default function Onboarding() {
                 />
               </div>
             </div>
-          )
-        }
-      ]
+          ),
+        },
+      ],
     };
-    
+
     return [
       ...commonSteps,
       ...roleSpecificSteps[role],
@@ -318,23 +327,22 @@ export default function Onboarding() {
               Your Echoverse workspace is now ready. You can access all features and start using the platform.
             </p>
           </div>
-        )
-      }
+        ),
+      },
     ];
   };
-  
-  // If user not available yet, show loading state
-  if (!user) {
+
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
-  
+
   const steps = getStepsForRole(user.role);
   const currentStepData = steps[currentStep];
-  
+
   return (
     <>
       <Helmet>
@@ -345,12 +353,12 @@ export default function Onboarding() {
         <div className="absolute inset-0 z-0">
           <AIVideoBackground opacity={0.1} />
         </div>
-        
+
         {/* Logo in top left */}
         <div className="absolute top-6 left-6 z-20">
           <Logo variant="default" className="cursor-pointer" onClick={() => navigate("/")} />
         </div>
-        
+
         <div className="container mx-auto py-20 px-4 relative z-10">
           {/* Progress indicator */}
           <div className="max-w-4xl mx-auto mb-8">
@@ -360,7 +368,7 @@ export default function Onboarding() {
             </div>
             <Progress value={progress} className="h-2" />
           </div>
-          
+
           <div className="flex flex-col md:flex-row max-w-4xl mx-auto bg-[#111] rounded-lg overflow-hidden border border-[#333]">
             {/* Steps sidebar */}
             <div className="w-full md:w-1/3 bg-[#111] border-r border-[#333] p-4">
@@ -372,59 +380,48 @@ export default function Onboarding() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
                     className={`flex items-center gap-3 p-3 rounded-md cursor-pointer transition-all ${
-                      currentStep === index 
-                        ? "bg-[#1f1f1f] border-l-4 border-primary" 
-                        : index < currentStep 
-                          ? "text-gray-400" 
-                          : "text-gray-500"
+                      currentStep === index
+                        ? "bg-[#1f1f1f] border-l-4 border-primary"
+                        : index < currentStep
+                        ? "text-green-400"
+                        : "text-gray-500 hover:bg-[#222]"
                     }`}
-                    onClick={() => index <= currentStep && setCurrentStep(index)}
+                    onClick={() => setCurrentStep(index)}
                   >
-                    <div className={`flex-shrink-0 ${currentStep === index ? "text-primary" : ""}`}>
-                      {step.icon}
+                    <span>{step.icon}</span>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-sm">{step.title}</span>
+                      <span className="text-xs text-gray-400">{step.description}</span>
                     </div>
-                    <div className="flex-grow">
-                      <h3 className={`text-sm font-medium ${currentStep === index ? "text-white" : ""}`}>
-                        {step.title}
-                      </h3>
-                      <p className="text-xs text-gray-500">{step.description}</p>
-                    </div>
-                    {index < currentStep && (
-                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                    )}
                   </motion.div>
                 ))}
               </div>
             </div>
-            
-            {/* Content area */}
-            <div className="w-full md:w-2/3 p-6">
+
+            {/* Step content */}
+            <div className="flex-1 p-6 relative">
               <motion.div
                 key={currentStep}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
-                className="h-full flex flex-col"
+                className="min-h-[250px]"
               >
-                <div className="flex-grow">
-                  {currentStepData.content}
-                </div>
-                
-                <div className="flex justify-end mt-8">
-                  <Button 
-                    onClick={handleContinue}
-                    className="auth-button"
-                  >
-                    {currentStep < steps.length - 1 ? (
-                      <>
-                        Continue
-                        <ChevronRight className="ml-2 h-4 w-4" />
-                      </>
-                    ) : "Go to Dashboard"}
-                  </Button>
-                </div>
+                {currentStepData.content}
               </motion.div>
+
+              <div className="mt-8 flex justify-end">
+                <Button
+                  variant="primary"
+                  onClick={handleContinue}
+                  disabled={isLoading}
+                  className="flex items-center gap-2"
+                >
+                  {currentStep === steps.length - 1 ? "Go to Dashboard" : "Continue"}
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -24,9 +24,11 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+const validRoles = ['work', 'school', 'personal', 'general'];
+
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
 
   const form = useForm<LoginFormData>({
@@ -37,30 +39,44 @@ export default function Login() {
     },
   });
 
+  useEffect(() => {
+    if (location.includes('?signup=success')) {
+      toast({
+        title: 'Account Created',
+        description: 'You can now sign in.',
+      });
+      // Clean the query param from URL after showing toast
+      setLocation('/login', { replace: true });
+    }
+  }, [location, setLocation, toast]);
+
   async function onSubmit(data: LoginFormData) {
     setIsLoading(true);
-    
+
     try {
       const response = await apiRequest('POST', '/api/auth/login', data);
       const result = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(result.message || 'Failed to login');
       }
-      
-      // Store user in local storage
+
       localStorage.setItem('user', JSON.stringify(result.user));
-      
+
       toast({
         title: 'Success',
         description: 'You have successfully logged in',
       });
-      
-      // Redirect to dashboard with user's current role or default to 'work'
-      const userRole = result.user.currentRole || 'work';
-      setLocation(`/dashboard/${userRole}`);
-      
+
+      const userRole = result.user.currentRole;
+
+      if (!validRoles.includes(userRole)) {
+        setLocation('/dashboard/work');
+      } else {
+        setLocation(`/dashboard/${userRole}`);
+      }
     } catch (error: any) {
+      console.error(error);
       toast({
         title: 'Error',
         description: error.message || 'Failed to login. Please try again.',
@@ -133,7 +149,10 @@ export default function Login() {
         <div className="mt-6 text-center">
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
             Don't have an account?{' '}
-            <Link href="/signup" className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 font-medium">
+            <Link
+              href="/signup"
+              className="text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300 font-medium"
+            >
               Sign up
             </Link>
           </p>

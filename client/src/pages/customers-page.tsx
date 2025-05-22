@@ -1,14 +1,15 @@
+// client/src/pages/customers-page.tsx
 
 import { DashboardLayout } from "@/components/layouts/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Search, Users, Mail, Phone } from "lucide-react";
+import { Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface Customer {
   id: number;
@@ -22,7 +23,7 @@ interface Customer {
   orders: number;
 }
 
-const customers: Customer[] = [
+const initialCustomers: Customer[] = [
   {
     id: 1,
     name: "Sarah Wilson",
@@ -33,11 +34,23 @@ const customers: Customer[] = [
     totalSpent: 1249.99,
     avatar: "https://randomuser.me/api/portraits/women/22.jpg",
     orders: 5
-  }
+  },
+  // You can add more customers here for real use
 ];
 
 export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [customers] = useState<Customer[]>(initialCustomers);
+
+  // Memoized filtered customers by name or email, case-insensitive
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers;
+    const query = searchQuery.toLowerCase();
+    return customers.filter(customer =>
+      customer.name.toLowerCase().includes(query) ||
+      customer.email.toLowerCase().includes(query)
+    );
+  }, [searchQuery, customers]);
 
   return (
     <DashboardLayout>
@@ -50,14 +63,16 @@ export default function CustomersPage() {
           </Button>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 max-w-md">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search customers..." 
-              className="pl-8" 
+            <Input
+              placeholder="Search customers..."
+              className="pl-8"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search customers by name or email"
+              autoComplete="off"
             />
           </div>
         </div>
@@ -78,36 +93,44 @@ export default function CustomersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {customers.map((customer) => (
-                  <TableRow key={customer.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <Avatar>
-                          <AvatarImage src={customer.avatar} />
-                          <AvatarFallback>
-                            {customer.name.split(" ").map(n => n[0]).join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{customer.name}</div>
-                          <div className="text-sm text-muted-foreground">{customer.email}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={customer.status === "active" ? "default" : "secondary"}>
-                        {customer.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{customer.orders}</TableCell>
-                    <TableCell>${customer.totalSpent.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Link href={`/customers/${customer.id}`}>
-                        <Button variant="outline" size="sm">View Details</Button>
-                      </Link>
+                {filteredCustomers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-4 text-muted-foreground">
+                      No customers found.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredCustomers.map((customer) => (
+                    <TableRow key={customer.id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-3">
+                          <Avatar>
+                            <AvatarImage src={customer.avatar} />
+                            <AvatarFallback>
+                              {customer.name.split(" ").map(n => n[0]).join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium">{customer.name}</div>
+                            <div className="text-sm text-muted-foreground">{customer.email}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={customer.status === "active" ? "default" : "secondary"}>
+                          {customer.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{customer.orders}</TableCell>
+                      <TableCell>${customer.totalSpent.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Link href={`/customers/${customer.id}`}>
+                          <Button variant="outline" size="sm">View Details</Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>

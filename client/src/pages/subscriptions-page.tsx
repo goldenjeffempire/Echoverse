@@ -1,10 +1,19 @@
-import { useState, useEffect } from "react";
+// client/src/pages/subscriptions-page.tsx
+
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { MainLayout } from "@/components/layouts/main-layout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -15,10 +24,11 @@ interface SubscriptionPlan {
   name: string;
   description: string;
   features: string[];
-  monthlyPrice: number;
-  yearlyPrice: number;
+  monthlyPrice: number; // in cents
+  yearlyPrice: number;  // in cents
   stripePriceIdMonthly: string | null;
   stripePriceIdYearly: string | null;
+  isFree?: boolean;
 }
 
 export default function SubscriptionPage() {
@@ -28,59 +38,19 @@ export default function SubscriptionPage() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: plans, isLoading } = useQuery<SubscriptionPlan[]>({
-    queryKey: ['/api/subscription-plans'],
+  const {
+    data: plans,
+    isLoading,
+    isError,
+    error,
+  } = useQuery<SubscriptionPlan[]>({
+    queryKey: ["/api/subscription-plans"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/subscription-plans");
+      if (!res.ok) throw new Error("Failed to fetch subscription plans");
       return res.json();
-    }
+    },
   });
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(price / 100);
-  };
-
-  const handleSubscribe = async (planId: number) => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to subscribe to a plan",
-        variant: "destructive",
-      });
-      setLocation("/auth");
-      return;
-    }
-
-    // Free plan doesn't require payment
-    if (planId === 1) {
-      toast({
-        title: "Free Plan Active",
-        description: "You are now on the free plan",
-      });
-      return;
-    }
-
-    try {
-      setSelectedPlan(planId);
-      setLocation(`/checkout?plan=${planId}&interval=${billingInterval}`);
-    } catch (error: any) {
-      toast({
-        title: "Subscription Failed",
-        description: error.message || "Could not initiate subscription process",
-        variant: "destructive",
-      });
-      setSelectedPlan(null);
-    }
-  };
-
-  const isCurrentPlan = (planId: number) => {
-    if (!user?.subscriptionTier) return planId === 1;
-    return user.subscriptionTier === plans?.find(p => p.id === planId)?.name;
-  };
 
   if (isLoading) {
     return (
@@ -91,6 +61,56 @@ export default function SubscriptionPage() {
       </MainLayout>
     );
   }
+
+  if (isError) {
+    return (
+      <MainLayout>
+        <div className="container py-12 text-center text-red-600">
+          Failed to load subscription plans: {(error as Error)?.message ?? "Unknown error"}
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(price / 100);
+
+  const handleSubscribe = (plan: SubscriptionPlan) => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to subscribe to a plan",
+        variant: "destructive",
+      });
+      setLocation("/auth");
+      return;
+    }
+
+    if (plan.isFree) {
+      toast({
+        title: "Free Plan Active",
+        description: "You are now on the free plan",
+      });
+      return;
+    }
+
+    setSelectedPlan(plan.id);
+    setLocation(`/checkout?plan=${plan.id}&interval=${billingInterval}`);
+  };
+
+  // Determine current plan by comparing user's subscriptionTier to plan name
+  const currentPlanName = user?.subscriptionTier;
+  const isCurrentPlan = (plan: SubscriptionPlan) => {
+    if (!currentPlanName) {
+      // If user has no subscriptionTier, consider free plan active if it exists
+      return plan.isFree === true;
+    }
+    return currentPlanName === plan.name;
+  };
 
   return (
     <MainLayout>
@@ -116,7 +136,10 @@ export default function SubscriptionPage() {
                 onClick={() => setBillingInterval("year")}
               >
                 Yearly
-                <Badge variant="secondary" className="ml-2 bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100">
+                <Badge
+                  variant="secondary"
+                  className="ml-2 bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100"
+                >
                   Save 15%
                 </Badge>
               </Button>
@@ -126,7 +149,12 @@ export default function SubscriptionPage() {
 
         <div className="grid gap-8 md:grid-cols-3">
           {plans?.map((plan) => (
-            <Card key={plan.id} className={`flex flex-col ${plan.id === 2 ? 'border-primary shadow-lg' : ''}`}>
+            <Card
+              key={plan.id}
+              className={`flex flex-col ${
+                plan.id === 2 ? "border-primary shadow-lg" : ""
+              }`}
+            >
               <CardHeader>
                 <CardTitle>{plan.name}</CardTitle>
                 <CardDescription>{plan.description}</CardDescription>
@@ -134,8 +162,14 @@ export default function SubscriptionPage() {
               <CardContent className="flex-1">
                 <div className="mb-6">
                   <p className="text-3xl font-bold">
-                    {formatPrice(billingInterval === "month" ? plan.monthlyPrice : plan.yearlyPrice)}
-                    <span className="text-sm text-gray-500 font-normal">/{billingInterval}</span>
+                    {formatPrice(
+                      billingInterval === "month"
+                        ? plan.monthlyPrice
+                        : plan.yearlyPrice
+                    )}
+                    <span className="text-sm text-gray-500 font-normal">
+                      /{billingInterval}
+                    </span>
                   </p>
                 </div>
                 <ul className="space-y-2">
@@ -149,16 +183,26 @@ export default function SubscriptionPage() {
               </CardContent>
               <CardFooter>
                 <Button
-                  variant={plan.id === 2 ? "default" : plan.id === 1 ? "outline" : "secondary"}
+                  variant={
+                    plan.id === 2
+                      ? "default"
+                      : plan.isFree
+                      ? "outline"
+                      : "secondary"
+                  }
                   className="w-full"
-                  disabled={isCurrentPlan(plan.id) || selectedPlan === plan.id}
-                  onClick={() => handleSubscribe(plan.id)}
+                  disabled={isCurrentPlan(plan) || selectedPlan === plan.id}
+                  onClick={() => handleSubscribe(plan)}
                 >
-                  {isCurrentPlan(plan.id) 
-                    ? "Current Plan" 
-                    : selectedPlan === plan.id 
-                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...</>
-                      : "Subscribe"}
+                  {isCurrentPlan(plan) ? (
+                    "Current Plan"
+                  ) : selectedPlan === plan.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+                    </>
+                  ) : (
+                    "Subscribe"
+                  )}
                 </Button>
               </CardFooter>
             </Card>
