@@ -1,77 +1,80 @@
+// client/src/pages/dashboard/general.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getQueryFn } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useUser } from '@/hooks/use-user';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Users, Activity, Globe } from 'lucide-react';
+import { User, CalendarCheck } from 'lucide-react';
 
-// Types for data coming from API
 interface GeneralMetrics {
   label: string;
   value: string | number;
-  icon: React.ReactNode;
   description: string;
+  icon: React.ReactNode;
 }
 
 interface GeneralDashboardData {
   metrics: GeneralMetrics[];
-  announcements: { id: string; message: string; date: string }[];
+  notifications: string[];
+}
+
+function GeneralGreeting({ username }: { username: string }) {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-2xl font-bold">Hello, {username}</h2>
+      <p className="text-muted-foreground">Here's your daily summary.</p>
+    </div>
+  );
+}
+
+function NotificationsList({ notifications }: { notifications: string[] }) {
+  if (!notifications.length) {
+    return <p className="text-sm text-muted-foreground mt-4">No new notifications.</p>;
+  }
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Notifications</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ul className="list-disc list-inside space-y-1 text-sm">
+          {notifications.map((note, idx) => (
+            <li key={idx}>{note}</li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function GeneralDashboard() {
-  const [user, setUser] = useState<any>(null);
+  const user = useUser();
   const { toast } = useToast();
-
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-  }, []);
 
   const { data, isLoading, error } = useQuery<GeneralDashboardData>({
     queryKey: ['/api/dashboard/general'],
     queryFn: getQueryFn({ on401: 'throw' }),
     enabled: !!user,
+    retry: 2,
   });
 
   useEffect(() => {
     if (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to load the general dashboard.',
+        title: 'Error loading general dashboard',
+        description: 'Please try again or contact support.',
         variant: 'destructive',
       });
     }
   }, [error, toast]);
-
-  const defaultMetrics: GeneralMetrics[] = [
-    {
-      label: 'Active Users',
-      value: 1024,
-      icon: <Users className="h-5 w-5 text-primary" />,
-      description: 'Currently online',
-    },
-    {
-      label: 'Server Load',
-      value: '75%',
-      icon: <Activity className="h-5 w-5 text-primary" />,
-      description: 'Average CPU usage',
-    },
-    {
-      label: 'Global Reach',
-      value: '24 countries',
-      icon: <Globe className="h-5 w-5 text-primary" />,
-      description: 'Users worldwide',
-    },
-  ];
 
   if (isLoading || !user) {
     return (
@@ -81,18 +84,30 @@ export default function GeneralDashboard() {
     );
   }
 
+  const metrics = data?.metrics || [
+    {
+      label: 'Profile Completeness',
+      value: '80%',
+      description: 'Keep it updated!',
+      icon: <User className="h-5 w-5 text-primary" />,
+    },
+    {
+      label: 'Upcoming Events',
+      value: 3,
+      description: 'Don’t miss out',
+      icon: <CalendarCheck className="h-5 w-5 text-primary" />,
+    },
+  ];
+
   return (
     <div className="space-y-6 p-6">
-      <div className="space-y-2">
-        <h2 className="text-2xl font-bold">Welcome, {user?.fullName || user?.username || 'User'}</h2>
-        <p className="text-muted-foreground">Here’s a quick snapshot of your environment.</p>
-      </div>
+      <GeneralGreeting username={user.fullName || user.username || 'User'} />
 
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
-        {(data?.metrics || defaultMetrics).map((metric, idx) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {metrics.map((metric, idx) => (
           <Card key={idx} className="bg-dark-card border-primary/20">
             <CardHeader className="flex items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CardTitle className="text-sm font-medium flex gap-2 items-center">
                 {metric.icon}
                 {metric.label}
               </CardTitle>
@@ -105,25 +120,7 @@ export default function GeneralDashboard() {
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Announcements</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {data?.announcements && data.announcements.length > 0 ? (
-            data.announcements.map(({ id, message, date }) => (
-              <div key={id} className="text-sm">
-                <p>{message}</p>
-                <time className="text-xs text-muted-foreground">
-                  {new Date(date).toLocaleDateString()}
-                </time>
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-muted-foreground">No announcements at this time.</p>
-          )}
-        </CardContent>
-      </Card>
+      <NotificationsList notifications={data?.notifications || []} />
     </div>
   );
 }

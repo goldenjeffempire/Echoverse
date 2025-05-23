@@ -1,9 +1,11 @@
+// client/src/pages/dashboard/work.tsx
 'use client';
 
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getQueryFn } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useUser } from '@/hooks/use-user';
 import {
   Card,
   CardContent,
@@ -12,19 +14,16 @@ import {
 } from '@/components/ui/card';
 import { Briefcase, Clock, ListTodo } from 'lucide-react';
 
-// Reuse UserContext from general for consistency
-import { UserContext, useUser } from './general';
-
 interface Task {
   id: string;
   title: string;
-  status: string; // e.g. 'To Do', 'In Progress', 'Done'
+  status: string;
 }
 
 interface Meeting {
   id: string;
   title: string;
-  time: string; // ISO string datetime
+  time: string;
 }
 
 interface Metrics {
@@ -54,7 +53,6 @@ function WorkBoard({ tasks }: { tasks: Task[] }) {
     return <p className="text-sm text-muted-foreground mt-4">No active tasks.</p>;
   }
 
-  // Group tasks by status for Kanban style display
   const groupedTasks = tasks.reduce<Record<string, Task[]>>((acc, task) => {
     const status = task.status || 'To Do';
     if (!acc[status]) acc[status] = [];

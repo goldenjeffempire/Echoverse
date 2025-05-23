@@ -44,7 +44,17 @@ import { DomainManager } from "@/components/hosting/DomainManager";
 import ModulesPage from "@/pages/modules";
 import Notifications from "@/pages/notifications";
 
-// Protected Route wrapper component
+// ✅ Create a simple fallback AuthPage if needed
+const AuthPage = () => (
+  <div className="h-screen flex items-center justify-center p-4 text-center">
+    <div>
+      <h1 className="text-2xl font-bold">Auth Portal</h1>
+      <p className="text-muted-foreground">Redirecting to login or signup...</p>
+    </div>
+  </div>
+);
+
+// Protected Route
 const ProtectedRoute = ({
   component: Component,
   children,
@@ -70,10 +80,7 @@ const ProtectedRoute = ({
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <div
-          className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
-          aria-label="Loading"
-        />
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -85,7 +92,7 @@ const ProtectedRoute = ({
     : null;
 };
 
-// Global error handler to catch unhandled errors and rejections
+// Global error handler
 function GlobalErrorHandler() {
   const { toast } = useToast();
 
@@ -119,7 +126,7 @@ function GlobalErrorHandler() {
   return null;
 }
 
-// AI Chat Widget visibility controller
+// Chatbot visibility controller
 function AIChatbotWrapper() {
   const [location] = useLocation();
   const hideChatbotOnRoutes = ["/auth", "/login", "/signup"];
@@ -148,12 +155,12 @@ export default function App() {
                     <SidebarProvider>
                       <DashboardLayout>
                         <Switch>
-                          {/* Dashboard Routes */}
+                          {/* Dashboard */}
                           <Route path="/" component={() => <ProtectedRoute component={WorkDashboard} />} />
+                          <Route path="/dashboard/general" component={() => <ProtectedRoute component={GeneralDashboard} />} />
+                          <Route path="/dashboard/school" component={() => <ProtectedRoute component={SchoolDashboard} />} />
                           <Route path="/dashboard/work" component={() => <ProtectedRoute component={WorkDashboard} />} />
                           <Route path="/dashboard/personal" component={() => <ProtectedRoute component={PersonalDashboard} />} />
-                          <Route path="/dashboard/school" component={() => <ProtectedRoute component={SchoolDashboard} />} />
-                          <Route path="/dashboard/general" component={() => <ProtectedRoute component={GeneralDashboard} />} />
 
                           {/* Education */}
                           <Route path="/education/lessons" component={() => <ProtectedRoute component={LessonBuilder} />} />
@@ -172,22 +179,23 @@ export default function App() {
                           {/* Marketplace */}
                           <Route path="/marketplace/books" component={() => <ProtectedRoute component={BookMarketplace} />} />
                           <Route path="/hosting/domains" component={() => <ProtectedRoute component={DomainManager} />} />
+                          <Route path="/marketplace" component={() => <ProtectedRoute component={MarketplacePage} />} />
+                          <Route path="/branding" component={() => <ProtectedRoute component={BrandingPage} />} />
 
                           {/* User */}
-                          <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
+                          <Route path="/profile" component={() => <ProtectedRoute component={ProfilePage} />} />
                           <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
                           <Route path="/modules" component={() => <ProtectedRoute component={ModulesPage} />} />
-                          <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
-                          <Route path="/checkout" component={() => <ProtectedRoute component={Checkout} />} />
+                          <Route path="/settings" component={() => <ProtectedRoute component={SettingsPage} />} />
+                          <Route path="/checkout" component={() => <ProtectedRoute component={CheckoutPage} />} />
+                          <Route path="/cart" component={() => <ProtectedRoute component={CartPage} />} />
+                          <Route path="/subscriptions" component={() => <ProtectedRoute component={SubscriptionsPage} />} />
+                          <Route path="/help" component={() => <ProtectedRoute component={HelpCenterPage} />} />
 
-                          {/* Misc */}
+                          {/* Auth fallback */}
                           <Route path="/auth" component={AuthPage} />
-                          <Route path="/branding" component={BrandingPage} />
-                          <Route path="/marketplace" component={MarketplacePage} />
-                          <Route path="/dashboard" component={() => <ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                          <Route path="/subscriptions" component={() => <ProtectedRoute><SubscriptionsPage /></ProtectedRoute>} />
-                          <Route path="/cart" component={() => <ProtectedRoute><CartPage /></ProtectedRoute>} />
-                          <Route path="/help" component={HelpCenterPage} />
+
+                          {/* Catch-all */}
                           <Route component={NotFound} />
                         </Switch>
                       </DashboardLayout>

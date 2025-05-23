@@ -1,118 +1,88 @@
+// client/src/pages/dashboard/personal.tsx
 'use client';
 
-import React, { useEffect, useState, createContext, useContext } from 'react';
+import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getQueryFn } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { useUser } from '@/hooks/use-user';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { User, Calendar, Heart } from 'lucide-react';
+import { Heart, CalendarHeart } from 'lucide-react';
 
-// User context for consistency across dashboards (can be shared or imported from general)
-interface UserInfo {
-  username: string;
-  fullName?: string;
-  dob?: string;
-  email?: string;
+interface PersonalDashboardData {
+  goals: { id: string; goal: string; progress: number }[];
+  upcomingEvents: { id: string; title: string; date: string }[];
 }
-
-const UserContext = createContext<UserInfo | null>(null);
-
-export const useUser = () => {
-  const user = useContext(UserContext);
-  if (!user) {
-    throw new Error('useUser must be used within UserProvider');
-  }
-  return user;
-};
 
 function PersonalGreeting({ username }: { username: string }) {
   return (
     <div className="space-y-2">
-      <h2 className="text-2xl font-bold">Hey {username}, welcome to your personal space</h2>
-      <p className="text-muted-foreground">Manage your goals and wellness here.</p>
+      <h2 className="text-2xl font-bold">Welcome, {username}</h2>
+      <p className="text-muted-foreground">Focus on what matters most ❤️</p>
     </div>
   );
 }
 
-interface Goal {
-  id: string;
-  title: string;
-  progress: number; // 0-100 %
-}
-
-interface WellnessStats {
-  sleepHours: number;
-  mood: string;
-}
-
-interface PersonalDashboardData {
-  goals: Goal[];
-  wellness: WellnessStats;
-}
-
-function GoalsBoard({ goals }: { goals: Goal[] }) {
-  if (goals.length === 0) {
-    return <p className="text-sm text-muted-foreground mt-4">No goals set yet. Time to set some!</p>;
+function GoalsList({ goals }: { goals: PersonalDashboardData['goals'] }) {
+  if (!goals.length) {
+    return <p className="text-sm text-muted-foreground mt-4">No personal goals set.</p>;
   }
 
   return (
     <Card className="mt-6">
       <CardHeader>
-        <CardTitle>Your Goals</CardTitle>
+        <CardTitle>Personal Goals</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {goals.map((goal) => (
-          <div key={goal.id} className="space-y-1">
-            <div className="flex justify-between font-medium">{goal.title}</div>
-            <progress
-              className="w-full h-3 rounded bg-muted"
-              value={goal.progress}
-              max={100}
-            />
-          </div>
-        ))}
+      <CardContent>
+        <ul className="space-y-3">
+          {goals.map(({ id, goal, progress }) => (
+            <li key={id} className="space-y-1">
+              <p className="font-semibold">{goal}</p>
+              <progress
+                className="w-full"
+                value={progress}
+                max={100}
+                aria-label={`${goal} progress`}
+              />
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );
 }
 
-function WellnessPanel({ wellness }: { wellness: WellnessStats }) {
+function EventsList({ events }: { events: PersonalDashboardData['upcomingEvents'] }) {
+  if (!events.length) {
+    return <p className="text-sm text-muted-foreground mt-4">No upcoming events.</p>;
+  }
+
   return (
     <Card className="mt-6">
       <CardHeader>
-        <CardTitle>Wellness Overview</CardTitle>
+        <CardTitle>Upcoming Events</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" />
-            <span>Sleep: {wellness.sleepHours} hours</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Heart className="h-5 w-5 text-primary" />
-            <span>Mood: {wellness.mood}</span>
-          </div>
-        </div>
+        <ul className="space-y-2">
+          {events.map(({ id, title, date }) => (
+            <li key={id}>
+              {title} — {new Date(date).toLocaleDateString()}
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   );
 }
 
 export default function PersonalDashboard() {
-  const [user, setUser] = useState<UserInfo | null>(null);
+  const user = useUser();
   const { toast } = useToast();
-
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-  }, []);
 
   const { data, isLoading, error } = useQuery<PersonalDashboardData>({
     queryKey: ['/api/dashboard/personal'],
@@ -124,8 +94,8 @@ export default function PersonalDashboard() {
   useEffect(() => {
     if (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to load your personal dashboard.',
+        title: 'Error loading personal dashboard',
+        description: 'Try refreshing or reach out for support.',
         variant: 'destructive',
       });
     }
@@ -140,13 +110,11 @@ export default function PersonalDashboard() {
   }
 
   return (
-    <UserContext.Provider value={user}>
-      <div className="space-y-6 p-6">
-        <PersonalGreeting username={user.fullName || user.username} />
+    <div className="space-y-6 p-6">
+      <PersonalGreeting username={user.fullName || user.username || 'Friend'} />
 
-        <GoalsBoard goals={data?.goals || []} />
-        {data?.wellness && <WellnessPanel wellness={data.wellness} />}
-      </div>
-    </UserContext.Provider>
+      <GoalsList goals={data?.goals || []} />
+      <EventsList events={data?.upcomingEvents || []} />
+    </div>
   );
 }
