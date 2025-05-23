@@ -1,5 +1,4 @@
 // client/src/pages/settings-page.tsx
-
 import React, { useState, useEffect, FormEvent } from "react";
 
 import {
@@ -19,7 +18,7 @@ import {
   Switch,
 } from "@/components/ui";
 
-import { toast } from "@/lib/toast";
+import toast from "@/lib/toast";
 
 import {
   Loader2,
@@ -33,12 +32,11 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-// Simulate backend logout API call
+// Backend API simulation functions
 async function apiLogout(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 1000));
 }
 
-// Simulate backend API key regeneration
 async function apiRegenerateKey(): Promise<string> {
   return new Promise((resolve) =>
     setTimeout(() => resolve("NEW-API-KEY-XYZ-1234567890"), 1500)
@@ -64,37 +62,32 @@ type ApiUsage = {
 };
 
 export default function SettingsPage() {
-  // --- User profile state ---
+  // States
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [errorProfile, setErrorProfile] = useState<string | null>(null);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
-  // --- Password change state ---
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
 
-  // --- Notifications ---
   const [notifications, setNotifications] = useState<NotificationsSettings>({
     emailNotifications: true,
     smsNotifications: false,
   });
   const [notifSaving, setNotifSaving] = useState(false);
 
-  // --- API key management ---
-  const [apiKey, setApiKey] = useState<string>("");
+  const [apiKey, setApiKey] = useState("");
   const [apiKeyLoading, setApiKeyLoading] = useState(true);
   const [apiKeyRegenerating, setApiKeyRegenerating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
-  // --- API usage stats ---
   const [apiUsage, setApiUsage] = useState<ApiUsage>({ used: 0, limit: 1000 });
   const [apiUsageLoading, setApiUsageLoading] = useState(true);
 
-  // --- Logout loading ---
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  // --- Fetch user, API key, and usage on mount ---
+  // Fetch profile, API key & usage on mount
   useEffect(() => {
     async function fetchData() {
       try {
@@ -102,7 +95,7 @@ export default function SettingsPage() {
         setApiKeyLoading(true);
         setApiUsageLoading(true);
 
-        // Simulate fetching user profile from backend
+        // Replace these with actual backend calls
         const fetchedUser: UserProfile = {
           username: "jeffery_dev",
           email: "jeff@example.com",
@@ -112,10 +105,8 @@ export default function SettingsPage() {
         };
         setUser(fetchedUser);
 
-        // Simulate fetching API key
         setApiKey("1234-5678-ABCD-EFGH");
 
-        // Simulate fetching API usage
         setApiUsage({ used: 250, limit: 1000 });
       } catch {
         setErrorProfile("Failed to load profile data.");
@@ -125,11 +116,10 @@ export default function SettingsPage() {
         setApiUsageLoading(false);
       }
     }
-
     fetchData();
   }, []);
 
-  // --- Update profile handler ---
+  // Update profile handler
   async function handleUpdateProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
@@ -139,10 +129,8 @@ export default function SettingsPage() {
     const formData = new FormData(form);
 
     try {
-      // Normally, call backend API to update profile
-      // await apiUpdateUserProfile(...)
+      // Backend update call here (replace with actual API call)
 
-      // For demo, update locally:
       setUser((prev) => ({
         ...(prev as UserProfile),
         email: formData.get("email") as string,
@@ -152,14 +140,14 @@ export default function SettingsPage() {
       }));
 
       toast.success("Profile updated successfully.");
-    } catch (error) {
+    } catch {
       toast.error("Failed to update profile.");
     } finally {
       setUpdatingProfile(false);
     }
   }
 
-  // --- Change password handler ---
+  // Change password handler
   async function handleChangePassword(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPasswordError("");
@@ -176,23 +164,27 @@ export default function SettingsPage() {
       return;
     }
 
-    try {
-      // Call backend change password API here
-      // await apiChangePassword(currentPassword, newPassword);
+    if (newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters.");
+      setChangingPassword(false);
+      return;
+    }
 
-      // Simulate delay
-      await new Promise((r) => setTimeout(r, 1000));
+    try {
+      // Call backend API to change password here
+
+      await new Promise((r) => setTimeout(r, 1000)); // Simulate delay
 
       toast.success("Password changed successfully.");
       form.reset();
-    } catch (error) {
+    } catch {
       setPasswordError("Failed to change password.");
     } finally {
       setChangingPassword(false);
     }
   }
 
-  // --- Toggle notification settings ---
+  // Toggle notifications
   async function handleToggleNotification(key: keyof NotificationsSettings) {
     setNotifSaving(true);
     try {
@@ -202,8 +194,7 @@ export default function SettingsPage() {
         [key]: newValue,
       }));
 
-      // Simulate backend save delay
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500)); // Simulate save delay
 
       toast.success(`Notification setting updated: ${key}`);
     } catch {
@@ -213,7 +204,7 @@ export default function SettingsPage() {
     }
   }
 
-  // --- Copy API key ---
+  // Copy API key
   function handleCopyApiKey() {
     if (!apiKey) return;
     navigator.clipboard.writeText(apiKey);
@@ -221,7 +212,7 @@ export default function SettingsPage() {
     setTimeout(() => setCopySuccess(false), 2000);
   }
 
-  // --- Regenerate API key ---
+  // Regenerate API key
   async function handleRegenerateApiKey() {
     setApiKeyRegenerating(true);
     try {
@@ -235,13 +226,13 @@ export default function SettingsPage() {
     }
   }
 
-  // --- Logout handler ---
+  // Logout
   async function handleLogout() {
     setLogoutLoading(true);
     try {
       await apiLogout();
       toast.success("Logged out successfully.");
-      // Add redirect or state clearing logic here
+      // TODO: Add redirect or state clearing logic here
     } catch {
       toast.error("Failed to log out.");
     } finally {
@@ -249,7 +240,7 @@ export default function SettingsPage() {
     }
   }
 
-  // --- Loading or error states ---
+  // Loading & error states
   if (loadingProfile) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -267,7 +258,7 @@ export default function SettingsPage() {
     );
   }
 
-  // --- Render UI ---
+  // Main UI render
   return (
     <div className="max-w-4xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-8">Settings</h1>
@@ -291,7 +282,7 @@ export default function SettingsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* PROFILE TAB */}
+        {/* PROFILE */}
         <TabsContent value="profile">
           <Card>
             <CardHeader>
@@ -319,6 +310,7 @@ export default function SettingsPage() {
                     defaultValue={user?.email}
                     placeholder="you@example.com"
                     required
+                    autoComplete="email"
                   />
                 </div>
 
@@ -331,6 +323,7 @@ export default function SettingsPage() {
                       type="text"
                       defaultValue={user?.firstName}
                       required
+                      autoComplete="given-name"
                     />
                   </div>
                   <div className="flex-1">
@@ -341,6 +334,7 @@ export default function SettingsPage() {
                       type="text"
                       defaultValue={user?.lastName}
                       required
+                      autoComplete="family-name"
                     />
                   </div>
                 </div>
@@ -352,7 +346,7 @@ export default function SettingsPage() {
                     name="bio"
                     defaultValue={user?.bio || ""}
                     rows={4}
-                    className="w-full rounded-md border border-gray-300 p-2"
+                    className="w-full rounded-md border border-gray-300 p-2 resize-none"
                     placeholder="Tell us about yourself"
                   />
                 </div>
@@ -367,7 +361,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* SECURITY TAB */}
+        {/* SECURITY */}
         <TabsContent value="security">
           <Card>
             <CardHeader>
@@ -375,7 +369,7 @@ export default function SettingsPage() {
               <CardDescription>Update your account password.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleChangePassword} className="space-y-4">
+              <form onSubmit={handleChangePassword} className="space-y-4" noValidate>
                 <div>
                   <Label htmlFor="currentPassword">Current Password</Label>
                   <Input
@@ -384,40 +378,39 @@ export default function SettingsPage() {
                     type="password"
                     placeholder="••••••••"
                     required
+                    autoComplete="current-password"
                   />
                 </div>
-
                 <div>
                   <Label htmlFor="newPassword">New Password</Label>
                   <Input
                     id="newPassword"
                     name="newPassword"
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="At least 8 characters"
                     required
-                    minLength={8}
+                    autoComplete="new-password"
                   />
                 </div>
-
                 <div>
                   <Label htmlFor="confirmPassword">Confirm New Password</Label>
                   <Input
                     id="confirmPassword"
                     name="confirmPassword"
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="Repeat new password"
                     required
-                    minLength={8}
+                    autoComplete="new-password"
                   />
                 </div>
 
                 {passwordError && (
-                  <p className="text-red-600">{passwordError}</p>
+                  <p className="text-sm text-red-600">{passwordError}</p>
                 )}
 
                 <CardFooter>
                   <Button type="submit" disabled={changingPassword}>
-                    {changingPassword ? "Updating..." : "Change Password"}
+                    {changingPassword ? "Changing..." : "Change Password"}
                   </Button>
                 </CardFooter>
               </form>
@@ -425,12 +418,12 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* NOTIFICATIONS TAB */}
+        {/* NOTIFICATIONS */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Control your notifications.</CardDescription>
+              <CardTitle>Notification Settings</CardTitle>
+              <CardDescription>Control your notification preferences.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -460,75 +453,69 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* API TAB */}
+        {/* API */}
         <TabsContent value="api">
           <Card>
             <CardHeader>
-              <CardTitle>API Key Management</CardTitle>
-              <CardDescription>
-                Keep your API keys secure and monitor usage.
-              </CardDescription>
+              <CardTitle>API Access</CardTitle>
+              <CardDescription>Manage your API key and usage.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <Input
-                  readOnly
-                  value={apiKeyLoading ? "Loading..." : apiKey}
-                  className="flex-grow font-mono tracking-wide"
-                  aria-label="API Key"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyApiKey}
-                  disabled={apiKeyLoading}
-                  aria-label="Copy API Key"
-                >
-                  {copySuccess ? <Check size={16} /> : <Copy size={16} />}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRegenerateApiKey}
-                  disabled={apiKeyRegenerating}
-                >
-                  {apiKeyRegenerating ? "Regenerating..." : "Regenerate"}
-                </Button>
-              </div>
+            <CardContent>
+              {apiKeyLoading ? (
+                <Loader2 className="animate-spin" size={24} />
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <Input
+                    type="text"
+                    value={apiKey}
+                    readOnly
+                    className="flex-1"
+                    aria-label="API Key"
+                  />
+                  <Button variant="outline" onClick={handleCopyApiKey} size="sm">
+                    {copySuccess ? <Check size={16} /> : <Copy size={16} />}
+                  </Button>
+                  <Button
+                    onClick={handleRegenerateApiKey}
+                    disabled={apiKeyRegenerating}
+                    size="sm"
+                  >
+                    {apiKeyRegenerating ? "Regenerating..." : "Regenerate"}
+                  </Button>
+                </div>
+              )}
 
-              <div>
+              <div className="mt-6">
                 <Label>API Usage</Label>
                 {apiUsageLoading ? (
                   <Loader2 className="animate-spin" size={24} />
                 ) : (
-                  <progress
-                    value={apiUsage.used}
-                    max={apiUsage.limit}
-                    className="w-full h-4 rounded-md"
-                  />
+                  <div className="text-sm text-gray-600">
+                    {apiUsage.used} of {apiUsage.limit} requests used
+                  </div>
                 )}
-                <p className="text-sm text-gray-600 mt-1">
-                  {apiUsage.used} / {apiUsage.limit} requests used
-                </p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* LOGOUT TAB */}
+        {/* LOGOUT */}
         <TabsContent value="logout">
-          <Card className="text-center">
+          <Card>
             <CardHeader>
-              <CardTitle>Log Out</CardTitle>
-              <CardDescription>Sign out of your account securely.</CardDescription>
+              <CardTitle>Logout</CardTitle>
+              <CardDescription>Sign out from your account.</CardDescription>
             </CardHeader>
             <CardContent>
+              <p className="mb-6">
+                Ready to end your session? Click below to logout securely.
+              </p>
               <Button
                 variant="destructive"
                 onClick={handleLogout}
                 disabled={logoutLoading}
               >
-                {logoutLoading ? "Logging out..." : "Log Out"}
+                {logoutLoading ? "Logging out..." : "Logout"}
               </Button>
             </CardContent>
           </Card>
