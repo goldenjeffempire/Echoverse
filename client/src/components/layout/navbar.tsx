@@ -24,40 +24,52 @@ import {
   X,
   Menu,
   Code,
-  Laptop,
+  Briefcase,
   BookOpen,
   LayoutDashboard,
   HelpCircle,
   Users,
-  Briefcase,
-  Store,
-  Box,
-  Rocket,
+  DollarSign,
+  Server,
+  FileText,
+  Globe,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
-// Menu config
+// Menu config with endpoints and hrefs
 const menuItems = {
   Product: [
     { name: "AI Studio", href: "/ai-studio", icon: <Code className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Features", href: "/features", icon: <Rocket className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Projects", href: "/projects", icon: <Box className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Marketplace", href: "/marketplace", icon: <Store className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Pricing", href: "/pricing", icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Enterprise", href: "/enterprise", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
   ],
-  Learn: [
-    { name: "Courses", href: "/courses", icon: <BookOpen className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Books", href: "/books", icon: <Laptop className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Blog", href: "/blog", icon: <Laptop className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Help Center", href: "/help", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
+  Solution: [
+    { name: "Use Cases", href: "/solution/use-cases", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Integrations", href: "/solution/integrations", icon: <Server className="w-4 h-4" aria-hidden="true" /> },
+    { name: "API Docs", href: "/solution/api-docs", icon: <FileText className="w-4 h-4" aria-hidden="true" /> },
   ],
-  Community: [
-    { name: "Team", href: "/team", icon: <Users className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Partners", href: "/partners", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Events", href: "/events", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Contribute", href: "/contribute", icon: <Rocket className="w-4 h-4" aria-hidden="true" /> },
+  Resources: [
+    { name: "Blog", href: "/resources/blog", icon: <BookOpen className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Help Center", href: "/resources/help", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Community", href: "/resources/community", icon: <Users className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Events", href: "/resources/events", icon: <Globe className="w-4 h-4" aria-hidden="true" /> },
+  ],
+  Pricing: [
+    { name: "Plans", href: "/pricing/plans", icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Billing FAQ", href: "/pricing/faq", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
+  ],
+  "AI Studio": [
+    { name: "Dashboard", href: "/ai-studio/dashboard", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Projects", href: "/ai-studio/projects", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Marketplace", href: "/ai-studio/marketplace", icon: <Server className="w-4 h-4" aria-hidden="true" /> },
+  ],
+  Enterprise: [
+    { name: "Overview", href: "/enterprise/overview", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Custom Solutions", href: "/enterprise/custom-solutions", icon: <Code className="w-4 h-4" aria-hidden="true" /> },
+    { name: "Contact Sales", href: "/enterprise/contact", icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
   ],
 };
 
@@ -69,12 +81,12 @@ export default function Navbar() {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   const toggleTheme = () => setTheme(theme === "light" ? "dark" : "light");
-
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
 
   return (
     <nav className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+        {/* Left - Logo + Desktop Menu */}
         <div className="flex items-center space-x-4">
           <Link href="/">
             <a className="flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-primary">
@@ -82,6 +94,7 @@ export default function Navbar() {
               <span className="font-bold text-xl text-primary-600 dark:text-primary-400 select-none">Echoverse</span>
             </a>
           </Link>
+
           <div className="hidden md:block">
             <NavigationMenu>
               <NavigationMenuList className="flex space-x-4">
@@ -116,7 +129,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Desktop right controls */}
+        {/* Right - Desktop Controls */}
         <div className="hidden md:flex items-center space-x-4">
           <Button
             variant="outline"
@@ -174,7 +187,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile menu button */}
+        {/* Mobile menu toggle */}
         <div className="md:hidden">
           <button
             onClick={toggleMobileMenu}

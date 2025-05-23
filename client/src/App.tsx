@@ -30,13 +30,11 @@ const SubscriptionsPage = lazy(() => import("@/pages/subscriptions-page"));
 const Notifications = lazy(() => import("@/pages/notifications"));
 const ModulesPage = lazy(() => import("@/pages/modules"));
 
-// Dashboard imports via barrel file
-const {
-  GeneralDashboard,
-  PersonalDashboard,
-  SchoolDashboard,
-  WorkDashboard,
-} = React.lazy(() => import("@/pages/dashboard"));
+// Dashboard role-based views
+const GeneralDashboard = lazy(() => import("@/pages/dashboard/general"));
+const PersonalDashboard = lazy(() => import("@/pages/dashboard/personal"));
+const SchoolDashboard = lazy(() => import("@/pages/dashboard/school"));
+const WorkDashboard = lazy(() => import("@/pages/dashboard/work"));
 
 // Feature components
 const LessonBuilder = lazy(() => import("@/components/education/LessonBuilder"));
@@ -48,17 +46,7 @@ const BookingSystem = lazy(() => import("@/components/scheduling/BookingSystem")
 const BookMarketplace = lazy(() => import("@/components/marketplace/BookMarketplace"));
 const DomainManager = lazy(() => import("@/components/hosting/DomainManager"));
 
-// Simple auth fallback page
-const AuthPage = () => (
-  <div className="h-screen flex items-center justify-center p-4 text-center">
-    <div>
-      <h1 className="text-2xl font-bold">Auth Portal</h1>
-      <p className="text-muted-foreground">Redirecting to login or signup...</p>
-    </div>
-  </div>
-);
-
-// RoleProtectedRoute with auth + role check + loading spinner
+// Role-protected route logic
 interface RoleProtectedRouteProps {
   component: React.ComponentType<any>;
   rolesAllowed: string[];
@@ -78,9 +66,10 @@ const RoleProtectedRoute = ({ component: Component, rolesAllowed, ...rest }: Rol
         setLoading(false);
         return;
       }
+
       try {
         const user = JSON.parse(userStr);
-        if (!user.roles || !Array.isArray(user.roles)) {
+        if (!Array.isArray(user.roles)) {
           setLocation("/login");
           setLoading(false);
           return;
@@ -115,7 +104,7 @@ const RoleProtectedRoute = ({ component: Component, rolesAllowed, ...rest }: Rol
   return authorized ? <Component {...rest} /> : null;
 };
 
-// Global error handler
+// Global error and toast listener
 function GlobalErrorHandler() {
   const { toast } = useToast();
 
@@ -149,13 +138,14 @@ function GlobalErrorHandler() {
   return null;
 }
 
-// AI Chat widget toggle on non-auth routes
+// Conditional chatbot renderer
 function AIChatbotWrapper() {
   const [location] = useLocation();
-  const hideChatbotOnRoutes = ["/auth", "/login", "/signup"];
+  const hideChatbotOnRoutes = ["/login", "/signup", "/unauthorized", "/not-found"];
   return hideChatbotOnRoutes.includes(location) ? null : <AIChatWidget />;
 }
 
+// Main App component
 export default function App() {
   const [location] = useLocation();
   const isAuthPage = ["/login", "/signup"].includes(location);
@@ -167,26 +157,26 @@ export default function App() {
           <ThemeProvider>
             <AuthProvider>
               <TooltipProvider>
-                <Router>
-                  <Suspense
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen">
-                        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-                      </div>
-                    }
-                  >
-                    {isAuthPage ? (
-                      <Switch>
-                        <Route path="/login" component={Login} />
-                        <Route path="/signup" component={Signup} />
-                        <Route component={NotFound} />
-                      </Switch>
-                    ) : (
-                      <SidebarProvider>
+                <SidebarProvider>
+                  <Router>
+                    <Suspense
+                      fallback={
+                        <div className="flex items-center justify-center min-h-screen">
+                          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+                        </div>
+                      }
+                    >
+                      {isAuthPage ? (
+                        <Switch>
+                          <Route path="/login" component={Login} />
+                          <Route path="/signup" component={Signup} />
+                          <Route component={NotFound} />
+                        </Switch>
+                      ) : (
                         <DashboardLayout>
                           <Switch>
                             {/* Dashboards */}
-                            <Route path="/" component={() => <RoleProtectedRoute component={WorkDashboard} rolesAllowed={["user", "admin"]} />} />
+                            <Route path="/" component={() => <RoleProtectedRoute component={WorkDashboard} rolesAllowed={["user", "admin"]} />} exact />
                             <Route path="/dashboard/general" component={() => <RoleProtectedRoute component={GeneralDashboard} rolesAllowed={["user", "admin"]} />} />
                             <Route path="/dashboard/school" component={() => <RoleProtectedRoute component={SchoolDashboard} rolesAllowed={["teacher", "admin"]} />} />
                             <Route path="/dashboard/work" component={() => <RoleProtectedRoute component={WorkDashboard} rolesAllowed={["user", "admin"]} />} />
@@ -215,17 +205,16 @@ export default function App() {
                             <Route path="/cart" component={() => <RoleProtectedRoute component={CartPage} rolesAllowed={["user", "admin"]} />} />
 
                             {/* Fallback */}
-                            <Route path="/unauthorized" component={Unauthorized} />
                             <Route component={NotFound} />
                           </Switch>
                         </DashboardLayout>
-                      </SidebarProvider>
-                    )}
-                  </Suspense>
-                  <Toaster />
-                  <GlobalErrorHandler />
-                  <AIChatbotWrapper />
-                </Router>
+                      )}
+                    </Suspense>
+                    <Toaster />
+                    <GlobalErrorHandler />
+                    <AIChatbotWrapper />
+                  </Router>
+                </SidebarProvider>
               </TooltipProvider>
             </AuthProvider>
           </ThemeProvider>

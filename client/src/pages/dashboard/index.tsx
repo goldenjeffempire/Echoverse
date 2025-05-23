@@ -1,5 +1,3 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 
@@ -11,11 +9,14 @@ export default function DashboardIndex() {
     // Immediate redirect attempt
     setLocation('/dashboard/general');
 
-    // Fallback redirect in case immediate doesn't work
+    // Fallback redirect in case immediate doesn't work (3 seconds for better UX)
     const fallback = setTimeout(() => {
       setRedirecting(false);
       setLocation('/dashboard/general');
-    }, 5000);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Fallback redirect triggered in DashboardIndex');
+      }
+    }, 3000);
 
     return () => clearTimeout(fallback);
   }, [setLocation]);
@@ -41,7 +42,7 @@ export default function DashboardIndex() {
           If you are not redirected automatically,{' '}
           <button
             onClick={() => setLocation('/dashboard/general')}
-            className="text-blue-600 hover:underline focus:outline-none"
+            className="text-blue-600 hover:underline focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
           >
             click here
           </button>{' '}

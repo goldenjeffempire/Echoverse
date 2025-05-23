@@ -1,10 +1,12 @@
+// client/src/components/layout/SidebarContext.tsx
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 
 interface SidebarContextType {
-  isSidebarOpen: boolean;
-  toggleSidebar: () => void;
+  collapsed: boolean;       // true means sidebar is slim/collapsed
+  toggleCollapse: () => void;
   openSidebar: () => void;
   closeSidebar: () => void;
+  isOpen: boolean;          // convenience derived state: !collapsed
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -13,28 +15,36 @@ interface SidebarProviderProps {
   children: ReactNode;
 }
 
+const LOCAL_STORAGE_KEY = "sidebar-collapsed";
+
 export const SidebarProvider: React.FC<SidebarProviderProps> = ({ children }) => {
-  // Initialize sidebar state from localStorage or default to true (open)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+  // default to false (expanded) if no saved state
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sidebarOpen");
-      return saved !== null ? JSON.parse(saved) : true;
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+      return saved !== null ? JSON.parse(saved) : false;
     }
-    return true; // fallback for SSR
+    return false;
   });
 
-  // Persist the sidebar state whenever it changes
   useEffect(() => {
-    localStorage.setItem("sidebarOpen", JSON.stringify(isSidebarOpen));
-  }, [isSidebarOpen]);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(collapsed));
+  }, [collapsed]);
 
-  // Action handlers
-  const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
-  const openSidebar = () => setIsSidebarOpen(true);
-  const closeSidebar = () => setIsSidebarOpen(false);
+  const toggleCollapse = () => setCollapsed(prev => !prev);
+  const openSidebar = () => setCollapsed(false);
+  const closeSidebar = () => setCollapsed(true);
 
   return (
-    <SidebarContext.Provider value={{ isSidebarOpen, toggleSidebar, openSidebar, closeSidebar }}>
+    <SidebarContext.Provider
+      value={{
+        collapsed,
+        toggleCollapse,
+        openSidebar,
+        closeSidebar,
+        isOpen: !collapsed,
+      }}
+    >
       {children}
     </SidebarContext.Provider>
   );
