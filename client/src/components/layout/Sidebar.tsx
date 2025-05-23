@@ -1,245 +1,132 @@
-// client/src/components/layout/Sidebar.tsx
 import React from "react";
-import { useLocation, Link } from "wouter";
-import { useSidebar } from "./SidebarContext";
-import {
-  Sidebar as SidebarContainer,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
-  SidebarSection,
-  SidebarSectionTitle,
-  SidebarNavList,
-  SidebarNavItem,
-} from "@/components/ui/sidebar";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import {
+  LayoutDashboard,
+  BookOpen,
+  Briefcase,
+  User,
+  Settings,
+  LogOut,
+} from "lucide-react";
 
-interface NavLinkProps {
-  href: string;
-  icon: string;
-  label: string;
-  badge?: number;
-}
-
-const NavLink: React.FC<NavLinkProps> = ({ href, icon, label, badge }) => {
-  const [location] = useLocation();
-  const isActive = location === href;
-
-  return (
-    <SidebarNavItem>
-      <Link href={href}>
-        <a
-          className={cn(
-            "sidebar-item flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 hover:bg-neutral-100 dark:hover:bg-neutral-700",
-            isActive &&
-              "active border-l-4 border-primary bg-opacity-10 dark:bg-opacity-20"
-          )}
-          aria-current={isActive ? "page" : undefined}
-          tabIndex={0}
-        >
-          <span
-            className={cn(
-              "material-icons mr-3 select-none",
-              isActive ? "text-primary-500" : "text-neutral-500"
-            )}
-            aria-hidden="true"
-          >
-            {icon}
-          </span>
-          <span className="flex-grow truncate">{label}</span>
-          {badge && badge > 0 && (
-            <span
-              className="ml-auto bg-primary-500 text-white text-xs px-1.5 py-0.5 rounded-full select-none"
-              aria-label={`${badge} new notifications`}
-            >
-              {badge}
-            </span>
-          )}
-        </a>
-      </Link>
-    </SidebarNavItem>
-  );
-};
-
-// Role-based menu config
-const roleMenus: Record<
-  string,
-  {
-    sectionTitle: string;
-    items: NavLinkProps[];
-  }[]
-> = {
-  general: [
-    {
-      sectionTitle: "General",
-      items: [
-        { href: "/dashboard/general", icon: "dashboard", label: "Dashboard" },
-        { href: "/explore", icon: "explore", label: "Explore" },
-        { href: "/notifications", icon: "notifications", label: "Notifications", badge: 2 },
-      ],
-    },
-    {
-      sectionTitle: "AI Modules",
-      items: [
-        { href: "/echochat", icon: "chat", label: "EchoChat" },
-        { href: "/echobuilder", icon: "precision_manufacturing", label: "EchoBuilder" },
-      ],
-    },
-  ],
-  school: [
-    {
-      sectionTitle: "School Dashboard",
-      items: [
-        { href: "/dashboard/school", icon: "school", label: "Dashboard" },
-        { href: "/library", icon: "auto_stories", label: "Library" },
-        { href: "/assignments", icon: "assignment", label: "Assignments" },
-      ],
-    },
-    {
-      sectionTitle: "AI Modules",
-      items: [
-        { href: "/echolibrary", icon: "auto_stories", label: "EchoLibrary" },
-        { href: "/echochat", icon: "chat", label: "EchoChat" },
-      ],
-    },
-  ],
-  personal: [
-    {
-      sectionTitle: "Personal Dashboard",
-      items: [
-        { href: "/dashboard/personal", icon: "home", label: "Dashboard" },
-        { href: "/goals", icon: "flag", label: "Goals" },
-        { href: "/journal", icon: "book", label: "Journal" },
-      ],
-    },
-    {
-      sectionTitle: "AI Modules",
-      items: [
-        { href: "/echobuilder", icon: "precision_manufacturing", label: "EchoBuilder" },
-        { href: "/echochat", icon: "chat", label: "EchoChat" },
-      ],
-    },
-  ],
-  work: [
-    {
-      sectionTitle: "Work Dashboard",
-      items: [
-        { href: "/dashboard/work", icon: "work", label: "Dashboard" },
-        { href: "/projects", icon: "folder", label: "Projects" },
-        { href: "/team", icon: "people", label: "Team" },
-        { href: "/calendar", icon: "calendar_month", label: "Calendar" },
-      ],
-    },
-    {
-      sectionTitle: "AI Modules",
-      items: [
-        { href: "/echoseller", icon: "shopping_bag", label: "EchoSeller" },
-        { href: "/echochat", icon: "chat", label: "EchoChat" },
-        { href: "/echobuilder", icon: "precision_manufacturing", label: "EchoBuilder" },
-      ],
-    },
-  ],
-};
+import { useAuth } from "@/hooks/use-auth";
 
 interface SidebarProps {
-  userRole?: string; // optional, defaults to "general"
+  isOpen?: boolean; // Optional, for collapsible sidebar if you want
+  onClose?: () => void; // Optional callback for mobile close
 }
 
-export default function Sidebar({ userRole = "general" }: SidebarProps) {
-  const { collapsed, toggleCollapse } = useSidebar();
+const navItems = [
+  {
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: <LayoutDashboard className="w-5 h-5" aria-hidden="true" />,
+  },
+  {
+    label: "School",
+    href: "/dashboard/school",
+    icon: <BookOpen className="w-5 h-5" aria-hidden="true" />,
+  },
+  {
+    label: "Work",
+    href: "/dashboard/work",
+    icon: <Briefcase className="w-5 h-5" aria-hidden="true" />,
+  },
+  {
+    label: "Personal",
+    href: "/dashboard/personal",
+    icon: <User className="w-5 h-5" aria-hidden="true" />,
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: <Settings className="w-5 h-5" aria-hidden="true" />,
+  },
+];
 
-  const menuSections = roleMenus[userRole] ?? roleMenus.general;
+export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
+  const { user, logoutMutation } = useAuth();
+  const [location] = useLocation();
 
-  // Safe role label for display
-  const roleLabel = userRole
-    ? userRole.charAt(0).toUpperCase() + userRole.slice(1)
-    : "General";
+  // Accessibility: focus trap could be added if sidebar overlays
+  // Responsive: This version assumes desktop sidebar, mobile handled separately
 
   return (
-    <SidebarContainer
+    <aside
       className={cn(
-        "transition-width duration-300 ease-in-out select-none",
-        collapsed ? "w-16" : "w-64"
+        "bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-700 h-full flex flex-col",
+        isOpen ? "w-64" : "w-16"
       )}
-      aria-expanded={!collapsed}
+      aria-label="Sidebar navigation"
     >
-      <SidebarHeader className="flex items-center justify-between px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
-        <div className="flex items-center space-x-2">
-          <div
-            className="h-8 w-8 rounded-md bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white font-bold text-lg"
-            aria-label="Echoverse logo"
-            role="img"
+      {/* Logo and branding */}
+      <div className="flex items-center justify-center h-16 border-b border-neutral-200 dark:border-neutral-700 px-4">
+        <Link href="/" aria-label="Go to home page" className="flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-primary rounded">
+          {/* Ideally your Logo component here */}
+          <svg
+            className="h-8 w-8 text-primary-600 dark:text-primary-400"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            viewBox="0 0 24 24"
+            aria-hidden="true"
           >
-            E
-          </div>
-          {!collapsed && <span className="font-bold text-lg">Echoverse</span>}
-        </div>
-        <button
-          onClick={toggleCollapse}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="p-1 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700 focus:outline-none focus:ring focus:ring-primary"
-        >
-          <span className="material-icons text-neutral-500">
-            {collapsed ? "chevron_right" : "chevron_left"}
-          </span>
-        </button>
-      </SidebarHeader>
+            <path d="M12 3v18m9-9H3" />
+          </svg>
+          {isOpen && <span className="font-bold text-xl text-primary-600 dark:text-primary-400 select-none">Echoverse</span>}
+        </Link>
+      </div>
 
-      {!collapsed && (
-        <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 flex items-center space-x-3">
+      {/* Navigation Links */}
+      <nav className="flex-1 overflow-y-auto py-4">
+        <ul role="list" className="space-y-1 px-2">
+          {navItems.map(({ label, href, icon }) => (
+            <li key={label}>
+              <Link href={href} aria-current={location === href ? "page" : undefined}>
+                <a
+                  className={cn(
+                    "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary",
+                    location === href
+                      ? "bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300"
+                      : "text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                  )}
+                >
+                  {icon}
+                  {isOpen && label}
+                </a>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      {/* User Info & Logout */}
+      {user && (
+        <div className="border-t border-neutral-200 dark:border-neutral-700 px-4 py-3 flex items-center space-x-3">
           <img
-            src="https://images.unsplash.com/photo-1568602471122-7832951cc4c5?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&h=100"
-            alt="User avatar"
-            className="h-10 w-10 rounded-full object-cover"
+            src={user.avatar ?? "/default-avatar.png"}
+            alt={`${user.name ?? "User"} avatar`}
+            className="w-10 h-10 rounded-full object-cover"
             loading="lazy"
-            decoding="async"
           />
-          <div className="flex flex-col leading-tight overflow-hidden">
-            <p className="font-medium text-neutral-900 dark:text-neutral-100 truncate select-text">
-              Alex Morgan
-            </p>
-            <div className="flex items-center space-x-1">
-              <span className="text-xs text-neutral-500 dark:text-neutral-400 select-text">
-                {roleLabel} Account
-              </span>
-              <span className="inline-block h-4 px-1.5 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 text-[10px] font-medium rounded select-text">
-                Pro
-              </span>
+          {isOpen && (
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 truncate">{user.name}</span>
+              <button
+                onClick={() => logoutMutation.mutate()}
+                className="text-xs text-red-600 hover:underline focus:outline-none focus:ring-1 focus:ring-red-600"
+                aria-label="Logout"
+              >
+                <div className="flex items-center gap-1">
+                  <LogOut className="w-4 h-4" aria-hidden="true" />
+                  <span>Logout</span>
+                </div>
+              </button>
             </div>
-          </div>
+          )}
         </div>
       )}
-
-      <SidebarContent>
-        {menuSections.map(({ sectionTitle, items }) => (
-          <SidebarSection key={sectionTitle} className="mt-2">
-            <SidebarSectionTitle>{sectionTitle}</SidebarSectionTitle>
-            <SidebarNavList>
-              {items.map(({ href, icon, label, badge }) => (
-                <NavLink
-                  key={href}
-                  href={href}
-                  icon={icon}
-                  label={label}
-                  badge={badge}
-                />
-              ))}
-            </SidebarNavList>
-          </SidebarSection>
-        ))}
-      </SidebarContent>
-
-      <SidebarFooter className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700">
-        <Link href="/settings">
-          <a
-            className="flex items-center space-x-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-primary-500 dark:hover:text-primary-400"
-            aria-label="Settings"
-          >
-            <span className="material-icons text-sm">settings</span>
-            {!collapsed && <span>Settings</span>}
-          </a>
-        </Link>
-      </SidebarFooter>
-    </SidebarContainer>
+    </aside>
   );
 }
