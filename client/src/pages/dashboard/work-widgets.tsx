@@ -1,38 +1,59 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+
+interface PerformanceMetric {
+  id: string;
+  metricName: string;
+  value: number;
+}
 
 export function WorkWidgets() {
-  const { data: tasks, isLoading } = useQuery({
-    queryKey: ["/api/work/tasks"],
+  const { data: metrics, isLoading, error } = useQuery<PerformanceMetric[]>({
+    queryKey: ['/api/work/metrics'],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/work/tasks");
+      const res = await apiRequest('GET', '/api/work/metrics');
+      if (!res.ok) throw new Error('Failed to fetch performance metrics');
       return res.json();
-    }
+    },
+    retry: 1,
+    staleTime: 15 * 60 * 1000,
   });
 
-  const pendingTasks = (tasks || []).filter(task => !task.completed);
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+  if (error) {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Pending Tasks</CardTitle>
+          <CardTitle>Performance Metrics</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p>Loading tasks...</p>
-          ) : pendingTasks.length === 0 ? (
-            <p>You're all caught up! 🎉</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {pendingTasks.map(task => (
-                <li key={task.id}>📝 {task.title}</li>
-              ))}
-            </ul>
-          )}
+          <p className="text-red-500">Unable to load performance metrics.</p>
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Performance Metrics</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p>Loading metrics...</p>
+        ) : metrics?.length === 0 ? (
+          <p>No metrics data available.</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {metrics.map(({ id, metricName, value }) => (
+              <li key={id}>
+                <strong>{metricName}:</strong> {value}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

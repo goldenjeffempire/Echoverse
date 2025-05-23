@@ -1,4 +1,3 @@
-// client/src/pages/dashboard/school.tsx
 'use client';
 
 import React, { useEffect } from 'react';
@@ -12,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { BookOpen, UserCheck } from 'lucide-react';
 
 interface Book {
   id: string;
@@ -46,12 +44,12 @@ function BookList({ books }: { books: Book[] }) {
         <CardTitle>Recommended Books</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="space-y-2">
-          {books.map((book) => (
-            <li key={book.id} className="border-b pb-2">
-              <strong>{book.title}</strong> by {book.author} <br />
+        <ul className="space-y-2 max-h-80 overflow-y-auto">
+          {books.map(({ id, title, author, ageRestriction }) => (
+            <li key={id} className="border-b pb-2">
+              <strong>{title}</strong> by {author} <br />
               <small className="text-muted-foreground">
-                Age {book.ageRestriction}+ recommended
+                Age {ageRestriction}+ recommended
               </small>
             </li>
           ))}
@@ -68,8 +66,9 @@ export default function SchoolDashboard() {
   const { data, isLoading, error } = useQuery<SchoolDashboardData>({
     queryKey: ['/api/dashboard/school'],
     queryFn: getQueryFn({ on401: 'throw' }),
-    enabled: !!user,
+    enabled: Boolean(user),
     retry: 2,
+    staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
@@ -90,27 +89,36 @@ export default function SchoolDashboard() {
     );
   }
 
-  // Age calculation for filtering (optional, can be done server-side)
   const age = user.dob
     ? Math.floor(
-        (new Date().getTime() - new Date(user.dob).getTime()) /
-          (1000 * 60 * 60 * 24 * 365.25)
+        (Date.now() - new Date(user.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25)
       )
     : 0;
 
-  const recommendedBooks = data?.recommendedBooks.filter(
-    (book) => book.ageRestriction <= age
-  ) || [];
+  const filteredBooks = data?.recommendedBooks.filter(book => book.ageRestriction <= age) || [];
 
   return (
-    <div className="space-y-6 p-6">
+    <main className="space-y-6 p-6 max-w-5xl mx-auto">
       <SchoolGreeting username={user.fullName || user.username || 'Student'} />
 
-      <p className="text-sm text-muted-foreground">
-        Attendance rate: {(data?.attendanceRate ?? 0).toFixed(1)}%
-      </p>
+      <BookList books={filteredBooks} />
 
-      <BookList books={recommendedBooks} />
-    </div>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Attendance Rate</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <progress
+            className="w-full"
+            value={data?.attendanceRate ?? 0}
+            max={100}
+            aria-label="Attendance Rate"
+          />
+          <p className="mt-2 text-center text-sm">
+            {data?.attendanceRate ?? 0}%
+          </p>
+        </CardContent>
+      </Card>
+    </main>
   );
 }

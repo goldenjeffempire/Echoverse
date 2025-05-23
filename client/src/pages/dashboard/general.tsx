@@ -1,4 +1,3 @@
-// client/src/pages/dashboard/general.tsx
 'use client';
 
 import React, { useEffect } from 'react';
@@ -29,7 +28,7 @@ interface GeneralDashboardData {
 function GeneralGreeting({ username }: { username: string }) {
   return (
     <div className="space-y-2">
-      <h2 className="text-2xl font-bold">Hello, {username}</h2>
+      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Hello, {username}</h2>
       <p className="text-muted-foreground">Here's your daily summary.</p>
     </div>
   );
@@ -37,7 +36,9 @@ function GeneralGreeting({ username }: { username: string }) {
 
 function NotificationsList({ notifications }: { notifications: string[] }) {
   if (!notifications.length) {
-    return <p className="text-sm text-muted-foreground mt-4">No new notifications.</p>;
+    return (
+      <p className="text-sm text-muted-foreground mt-4">No new notifications.</p>
+    );
   }
   return (
     <Card className="mt-6">
@@ -45,7 +46,7 @@ function NotificationsList({ notifications }: { notifications: string[] }) {
         <CardTitle>Notifications</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="list-disc list-inside space-y-1 text-sm">
+        <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-gray-300">
           {notifications.map((note, idx) => (
             <li key={idx}>{note}</li>
           ))}
@@ -78,13 +79,14 @@ export default function GeneralDashboard() {
 
   if (isLoading || !user) {
     return (
-      <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center bg-background dark:bg-background-dark">
         <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full" />
       </div>
     );
   }
 
-  const metrics = data?.metrics || [
+  // Fallback metrics if API fails or no data present
+  const metrics = data?.metrics ?? [
     {
       label: 'Profile Completeness',
       value: '80%',
@@ -100,14 +102,14 @@ export default function GeneralDashboard() {
   ];
 
   return (
-    <div className="space-y-6 p-6">
-      <GeneralGreeting username={user.fullName || user.username || 'User'} />
+    <main className="space-y-6 p-6 bg-background dark:bg-background-dark min-h-screen">
+      <GeneralGreeting username={user.fullName ?? user.username ?? 'User'} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {metrics.map((metric, idx) => (
-          <Card key={idx} className="bg-dark-card border-primary/20">
+          <Card key={idx} className="bg-dark-card border border-primary/20">
             <CardHeader className="flex items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium flex gap-2 items-center">
+              <CardTitle className="text-sm font-medium flex gap-2 items-center text-gray-900 dark:text-gray-100">
                 {metric.icon}
                 {metric.label}
               </CardTitle>
@@ -118,9 +120,9 @@ export default function GeneralDashboard() {
             </CardContent>
           </Card>
         ))}
-      </div>
+      </section>
 
-      <NotificationsList notifications={data?.notifications || []} />
-    </div>
+      <NotificationsList notifications={data?.notifications ?? []} />
+    </main>
   );
 }

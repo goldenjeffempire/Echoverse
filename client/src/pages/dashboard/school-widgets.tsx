@@ -1,45 +1,60 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+
+interface HomeworkAssignment {
+  id: string;
+  subject: string;
+  dueDate: string;
+  completed: boolean;
+}
 
 export function SchoolWidgets() {
-  const { user } = useAuth();
-
-  const { data: books, isLoading } = useQuery({
-    queryKey: ["/api/library/books", user?.dob],
+  const { data: assignments, isLoading, error } = useQuery<HomeworkAssignment[]>({
+    queryKey: ['/api/school/homework'],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/library/books");
+      const res = await apiRequest('GET', '/api/school/homework');
+      if (!res.ok) throw new Error('Failed to fetch homework assignments');
       return res.json();
     },
-    enabled: !!user?.dob,
+    retry: 1,
+    staleTime: 15 * 60 * 1000, // 15 minutes cache
   });
 
-  const age = user?.dob ? Math.floor((Date.now() - new Date(user.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0;
-  const filteredBooks = (books || []).filter(book => age >= 18 ? true : !book.adult);
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+  if (error) {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Recommended Books</CardTitle>
+          <CardTitle>Homework Assignments</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p>Loading books...</p>
-          ) : filteredBooks.length === 0 ? (
-            <p>No books found.</p>
-          ) : (
-            <ul className="space-y-2">
-              {filteredBooks.map(book => (
-                <li key={book.id} className="text-sm">
-                  📘 {book.title}
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="text-red-500">Could not load homework assignments.</p>
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>Homework Assignments</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p>Loading assignments...</p>
+        ) : assignments?.length === 0 ? (
+          <p>No pending homework! Great job 🎉</p>
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-y-auto text-sm">
+            {assignments.map(({ id, subject, dueDate, completed }) => (
+              <li key={id} className={completed ? 'line-through text-muted-foreground' : ''}>
+                {subject} — due {new Date(dueDate).toLocaleDateString()}
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

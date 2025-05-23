@@ -1,4 +1,3 @@
-// client/src/pages/dashboard/personal.tsx
 'use client';
 
 import React, { useEffect } from 'react';
@@ -12,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Heart, CalendarHeart } from 'lucide-react';
 
 interface PersonalDashboardData {
   goals: { id: string; goal: string; progress: number }[];
@@ -87,15 +85,16 @@ export default function PersonalDashboard() {
   const { data, isLoading, error } = useQuery<PersonalDashboardData>({
     queryKey: ['/api/dashboard/personal'],
     queryFn: getQueryFn({ on401: 'throw' }),
-    enabled: !!user,
+    enabled: Boolean(user),
     retry: 2,
+    staleTime: 5 * 60 * 1000, // cache for 5 mins to reduce server load
   });
 
   useEffect(() => {
     if (error) {
       toast({
         title: 'Error loading personal dashboard',
-        description: 'Try refreshing or reach out for support.',
+        description: 'Try refreshing or contact support if the issue persists.',
         variant: 'destructive',
       });
     }
@@ -110,11 +109,11 @@ export default function PersonalDashboard() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <main className="space-y-6 p-6 max-w-5xl mx-auto">
       <PersonalGreeting username={user.fullName || user.username || 'Friend'} />
 
       <GoalsList goals={data?.goals || []} />
       <EventsList events={data?.upcomingEvents || []} />
-    </div>
+    </main>
   );
 }

@@ -1,5 +1,3 @@
-// client/src/pages/home-page.tsx
-
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
@@ -13,37 +11,37 @@ import { CTASection } from "@/components/home/cta-section";
 export default function HomePage() {
   const [location] = useLocation();
 
-  // Scroll to anchor on mount
   useEffect(() => {
-    const handleScrollToHash = () => {
-      if (typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
 
-      const hash = location.split("#")[1];
-      if (hash) {
-        const el = document.getElementById(hash);
-        if (el) {
-          // Wait a tick for layout to stabilize
-          setTimeout(() => {
-            el.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 150);
-        }
-      } else {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+    const hash = location.split("#")[1];
+
+    if (hash) {
+      const el = document.getElementById(hash);
+
+      if (el) {
+        // Delay to let layout finalize before scrolling
+        const timeoutId = setTimeout(() => {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+
+        // Cleanup in case component unmounts quickly
+        return () => clearTimeout(timeoutId);
       }
-    };
-
-    handleScrollToHash();
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [location]);
 
   return (
     <MainLayout>
-      <div className="min-h-screen bg-dark-base">
+      <main className="min-h-screen bg-dark-base flex flex-col">
         <HeroSection />
         <FeaturesSection />
         <AISection />
         <LibraryPreviewSection />
         <CTASection />
-      </div>
+      </main>
     </MainLayout>
   );
 }

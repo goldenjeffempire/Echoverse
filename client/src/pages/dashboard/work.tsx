@@ -1,4 +1,3 @@
-// client/src/pages/dashboard/work.tsx
 'use client';
 
 import React, { useEffect } from 'react';
@@ -12,106 +11,60 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Briefcase, Clock, ListTodo } from 'lucide-react';
 
 interface Task {
   id: string;
   title: string;
-  status: string;
+  status: 'pending' | 'in-progress' | 'completed';
+  dueDate: string;
 }
 
 interface Meeting {
   id: string;
-  title: string;
+  subject: string;
   time: string;
 }
 
-interface Metrics {
-  label: string;
-  value: string | number;
-  description: string;
-  icon: React.ReactNode;
-}
-
 interface WorkDashboardData {
-  metrics: Metrics[];
   tasks: Task[];
   meetings: Meeting[];
+  productivityScore: number; // 0 - 100
 }
 
-function WorkGreeting({ username }: { username: string }) {
+function TaskBoard({ tasks }: { tasks: Task[] }) {
+  const statusGroups = {
+    pending: [] as Task[],
+    'in-progress': [] as Task[],
+    completed: [] as Task[],
+  };
+
+  tasks.forEach(task => {
+    statusGroups[task.status].push(task);
+  });
+
   return (
-    <div className="space-y-2">
-      <h2 className="text-2xl font-bold">Welcome back, {username}</h2>
-      <p className="text-muted-foreground">Let’s get that bread 🥖</p>
+    <div className="grid grid-cols-3 gap-4 mt-6">
+      {(['pending', 'in-progress', 'completed'] as const).map(status => (
+        <Card key={status}>
+          <CardHeader>
+            <CardTitle>{status.replace('-', ' ').toUpperCase()}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statusGroups[status].length === 0 ? (
+              <p className="text-muted-foreground">No {status} tasks.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {statusGroups[status].map(({ id, title, dueDate }) => (
+                  <li key={id}>
+                    {title} (Due {new Date(dueDate).toLocaleDateString()})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ))}
     </div>
-  );
-}
-
-function WorkBoard({ tasks }: { tasks: Task[] }) {
-  if (!tasks.length) {
-    return <p className="text-sm text-muted-foreground mt-4">No active tasks.</p>;
-  }
-
-  const groupedTasks = tasks.reduce<Record<string, Task[]>>((acc, task) => {
-    const status = task.status || 'To Do';
-    if (!acc[status]) acc[status] = [];
-    acc[status].push(task);
-    return acc;
-  }, {});
-
-  return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>Kanban Board</CardTitle>
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {Object.entries(groupedTasks).map(([status, taskList]) => (
-          <div key={status} className="space-y-2">
-            <h4 className="text-sm font-semibold">{status}</h4>
-            {taskList.map((task) => (
-              <div
-                key={task.id}
-                className="p-2 border border-muted rounded-md bg-card text-sm"
-              >
-                {task.title}
-              </div>
-            ))}
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function WorkAgenda({ meetings }: { meetings: Meeting[] }) {
-  if (!meetings.length) {
-    return <p className="text-sm text-muted-foreground mt-4">No meetings scheduled today.</p>;
-  }
-
-  return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle>Today’s Schedule</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {meetings.map((meeting) => (
-          <div
-            key={meeting.id}
-            className="flex justify-between text-sm"
-            title={new Date(meeting.time).toLocaleString()}
-          >
-            <span>{meeting.title}</span>
-            <span className="text-muted-foreground">
-              {new Date(meeting.time).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -122,15 +75,16 @@ export default function WorkDashboard() {
   const { data, isLoading, error } = useQuery<WorkDashboardData>({
     queryKey: ['/api/dashboard/work'],
     queryFn: getQueryFn({ on401: 'throw' }),
-    enabled: !!user,
+    enabled: Boolean(user),
     retry: 2,
+    staleTime: 5 * 60 * 1000,
   });
 
   useEffect(() => {
     if (error) {
       toast({
         title: 'Error loading work dashboard',
-        description: 'Try refreshing or reach out if this persists.',
+        description: 'Try refreshing or contact your admin.',
         variant: 'destructive',
       });
     }
@@ -144,51 +98,50 @@ export default function WorkDashboard() {
     );
   }
 
-  const metrics =
-    data?.metrics || [
-      {
-        label: 'Tasks Completed',
-        value: 0,
-        description: 'This week',
-        icon: <ListTodo className="h-5 w-5 text-primary" />,
-      },
-      {
-        label: 'Hours Logged',
-        value: '0h',
-        description: 'Tracked via TimeTool',
-        icon: <Clock className="h-5 w-5 text-primary" />,
-      },
-      {
-        label: 'Meetings Today',
-        value: 0,
-        description: 'Better bring coffee ☕',
-        icon: <Briefcase className="h-5 w-5 text-primary" />,
-      },
-    ];
-
   return (
-    <div className="space-y-6 p-6">
-      <WorkGreeting username={user.fullName || user.username || 'Pro Worker'} />
+    <main className="p-6 max-w-6xl mx-auto space-y-6">
+      <h2 className="text-2xl font-bold">
+        Welcome back, {user.fullName || user.username || 'Team Player'}
+      </h2>
+      <p className="text-muted-foreground">Let’s get that bread 🥖</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {metrics.map((metric, idx) => (
-          <Card key={idx} className="bg-dark-card border-primary/20">
-            <CardHeader className="flex items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium flex gap-2 items-center">
-                {metric.icon}
-                {metric.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-white">{metric.value}</div>
-              <p className="text-xs text-muted-foreground">{metric.description}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Productivity Score</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <progress
+            className="w-full"
+            max={100}
+            value={data?.productivityScore ?? 0}
+            aria-label="Productivity Score"
+          />
+          <p className="text-center mt-2 text-sm">
+            {data?.productivityScore ?? 0}%
+          </p>
+        </CardContent>
+      </Card>
 
-      <WorkBoard tasks={data?.tasks || []} />
-      <WorkAgenda meetings={data?.meetings || []} />
-    </div>
+      <TaskBoard tasks={data?.tasks || []} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upcoming Meetings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data?.meetings.length === 0 ? (
+            <p className="text-muted-foreground">No meetings scheduled.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {data?.meetings.map(({ id, subject, time }) => (
+                <li key={id}>
+                  {subject} — {new Date(time).toLocaleString()}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </main>
   );
 }

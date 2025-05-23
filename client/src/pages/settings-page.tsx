@@ -18,7 +18,7 @@ import {
   Switch,
 } from "@/components/ui";
 
-import toast from "@/lib/toast";
+import { useToast } from "@/lib/toast";
 
 import {
   Loader2,
