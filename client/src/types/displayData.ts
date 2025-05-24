@@ -4,25 +4,25 @@ export interface Task {
   id: number;
   title: string;
   completed: boolean;
-  // ... add relevant props
+  // add more props as needed
 }
 
 export interface Metric {
   name: string;
   value: number;
-  // ...
+  // extend as needed
 }
 
 export interface Course {
   id: number;
   name: string;
-  // ...
+  // etc.
 }
 
 export interface StudySession {
   id: number;
   participants: Participant[];
-  // ...
+  // etc.
 }
 
 export interface Participant {
@@ -32,7 +32,7 @@ export interface Participant {
 
 export interface Assignment {
   id: number;
-  status: 'completed' | 'pending' | string;
+  status: "completed" | "pending" | string;
   dueDate: Date;
   // ...
 }

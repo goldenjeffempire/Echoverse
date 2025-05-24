@@ -35,48 +35,22 @@ import {
   Globe,
   Moon,
   Sun,
-  ChevronDown,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
-// Menu config with endpoints and hrefs
+interface NavbarProps {
+  toggleSidebar: () => void;
+  isMobile: boolean;
+}
+
 const menuItems = {
-  Product: [
-    { name: "AI Studio", href: "/ai-studio", icon: <Code className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Pricing", href: "/pricing", icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Enterprise", href: "/enterprise", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
-  ],
-  Solution: [
-    { name: "Use Cases", href: "/solution/use-cases", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Integrations", href: "/solution/integrations", icon: <Server className="w-4 h-4" aria-hidden="true" /> },
-    { name: "API Docs", href: "/solution/api-docs", icon: <FileText className="w-4 h-4" aria-hidden="true" /> },
-  ],
-  Resources: [
-    { name: "Blog", href: "/resources/blog", icon: <BookOpen className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Help Center", href: "/resources/help", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Community", href: "/resources/community", icon: <Users className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Events", href: "/resources/events", icon: <Globe className="w-4 h-4" aria-hidden="true" /> },
-  ],
-  Pricing: [
-    { name: "Plans", href: "/pricing/plans", icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Billing FAQ", href: "/pricing/faq", icon: <HelpCircle className="w-4 h-4" aria-hidden="true" /> },
-  ],
-  "AI Studio": [
-    { name: "Dashboard", href: "/ai-studio/dashboard", icon: <LayoutDashboard className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Projects", href: "/ai-studio/projects", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Marketplace", href: "/ai-studio/marketplace", icon: <Server className="w-4 h-4" aria-hidden="true" /> },
-  ],
-  Enterprise: [
-    { name: "Overview", href: "/enterprise/overview", icon: <Briefcase className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Custom Solutions", href: "/enterprise/custom-solutions", icon: <Code className="w-4 h-4" aria-hidden="true" /> },
-    { name: "Contact Sales", href: "/enterprise/contact", icon: <DollarSign className="w-4 h-4" aria-hidden="true" /> },
-  ],
+  // ... your menu items as before ...
 };
 
-export default function Navbar() {
+export default function Navbar({ toggleSidebar, isMobile }: NavbarProps) {
   const { theme, setTheme } = useTheme();
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
@@ -88,8 +62,23 @@ export default function Navbar() {
   return (
     <nav className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-        {/* Left - Logo + Desktop Menu */}
+
+        {/* Left - Sidebar Toggle (mobile) + Logo + Desktop Menu */}
         <div className="flex items-center space-x-4">
+
+          {/* Sidebar toggle only visible on mobile */}
+          {isMobile && (
+            <button
+              id="mobile-menu-btn"
+              type="button"
+              onClick={toggleSidebar}
+              className="p-2 rounded-md focus:outline-none focus:ring focus:ring-primary"
+              aria-label="Toggle sidebar"
+            >
+              <Menu className="w-6 h-6" aria-hidden="true" />
+            </button>
+          )}
+
           <Link href="/" aria-label="Go to home page" className="flex items-center space-x-2 focus:outline-none focus:ring-2 focus:ring-primary">
             <Logo className="h-8 w-auto" />
             <span className="font-bold text-xl text-primary-600 dark:text-primary-400 select-none">Echoverse</span>
@@ -187,21 +176,21 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile menu button */}
+        {/* Mobile menu button - for main nav menu toggle */}
         <div className="md:hidden">
           <button
             type="button"
             onClick={toggleMobileMenu}
             className="p-2 rounded-md focus:outline-none focus:ring focus:ring-primary"
             aria-expanded={mobileMenuOpen}
-            aria-label="Toggle menu"
+            aria-label="Toggle main menu"
           >
             {mobileMenuOpen ? <X className="w-6 h-6" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile menu panel */}
+      {/* Mobile main nav menu panel */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div

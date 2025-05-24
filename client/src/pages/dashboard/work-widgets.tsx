@@ -1,7 +1,7 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface PerformanceMetric {
   id: string;
@@ -10,11 +10,11 @@ interface PerformanceMetric {
 }
 
 export function WorkWidgets() {
-  const { data: metrics, isLoading, error } = useQuery<PerformanceMetric[]>({
-    queryKey: ['/api/work/metrics'],
+  const { data: metrics = [], isLoading, error } = useQuery<PerformanceMetric[]>({
+    queryKey: ["/api/work/metrics"],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/work/metrics');
-      if (!res.ok) throw new Error('Failed to fetch performance metrics');
+      const res = await apiRequest("GET", "/api/work/metrics");
+      if (!res.ok) throw new Error("Failed to fetch performance metrics");
       return res.json();
     },
     retry: 1,
@@ -42,7 +42,7 @@ export function WorkWidgets() {
       <CardContent>
         {isLoading ? (
           <p>Loading metrics...</p>
-        ) : metrics?.length === 0 ? (
+        ) : metrics.length === 0 ? (
           <p>No metrics data available.</p>
         ) : (
           <ul className="space-y-2 text-sm">

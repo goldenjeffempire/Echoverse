@@ -1,7 +1,7 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface JournalEntry {
   id: string;
@@ -10,11 +10,11 @@ interface JournalEntry {
 }
 
 export function PersonalWidgets() {
-  const { data: journalEntries, isLoading, error } = useQuery<JournalEntry[]>({
-    queryKey: ['/api/personal/journal'],
+  const { data: journalEntries = [], isLoading, error } = useQuery<JournalEntry[]>({
+    queryKey: ["/api/personal/journal"],
     queryFn: async () => {
-      const res = await apiRequest('GET', '/api/personal/journal');
-      if (!res.ok) throw new Error('Failed to fetch journal entries');
+      const res = await apiRequest("GET", "/api/personal/journal");
+      if (!res.ok) throw new Error("Failed to fetch journal entries");
       return res.json();
     },
     retry: 1,
@@ -43,7 +43,7 @@ export function PersonalWidgets() {
         <CardContent>
           {isLoading ? (
             <p>Loading journals...</p>
-          ) : journalEntries?.length === 0 ? (
+          ) : journalEntries.length === 0 ? (
             <p>No journal entries yet. Start writing!</p>
           ) : (
             <ul className="space-y-2 text-sm max-h-64 overflow-y-auto">

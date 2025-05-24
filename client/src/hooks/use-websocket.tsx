@@ -1,93 +1,98 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useToast } from './use-toast';
+type WebSocketReadyState = 
+  | typeof WebSocket.CONNECTING
+  | typeof WebSocket.OPEN
+  | typeof WebSocket.CLOSING
+  | typeof WebSocket.CLOSED;
 
-interface WebSocketOptions {
-  reconnectAttempts?: number;
-  reconnectInterval?: number;
-  onMessage?: (data: any) => void;
+interface UseWebSocketOptions {
+  debug?: boolean;             // Enable console logs for dev
+  reconnectInterval?: number;  // ms before trying to reconnect on close/error
+  maxReconnectAttempts?: number; // limit reconnection attempts
 }
 
-export function useWebSocket(url: string, options: WebSocketOptions = {}) {
-  const [socket, setSocket] = useState<WebSocket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const reconnectCount = useRef(0);
-  const { toast } = useToast();
-
+export function useWebSocket<T = any>(
+  url: string,
+  options?: UseWebSocketOptions
+) {
   const {
-    reconnectAttempts = 5,
+    debug = false,
     reconnectInterval = 3000,
-    onMessage
-  } = options;
+    maxReconnectAttempts = 10,
+  } = options || {};
+
+  const ws = useRef<WebSocket | null>(null);
+  const reconnectAttempts = useRef(0);
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [message, setMessage] = useState<T | null>(null);
+  const [readyState, setReadyState] = useState<WebSocketReadyState>(WebSocket.CLOSED);
+  const [error, setError] = useState<Error | null>(null);
 
   const connect = useCallback(() => {
-    try {
-      const ws = new WebSocket(url);
+    if (debug) console.log(`[WS] Connecting to ${url}...`);
 
-      ws.onopen = () => {
-        setIsConnected(true);
-        setError(null);
-        reconnectCount.current = 0;
-        toast({
-          title: "Connected",
-          description: "WebSocket connection established",
-        });
-      };
+    ws.current = new WebSocket(url);
 
-      ws.onclose = () => {
-        setIsConnected(false);
-        if (reconnectCount.current < reconnectAttempts) {
-          reconnectCount.current += 1;
-          setTimeout(connect, reconnectInterval);
-        }
-      };
+    ws.current.onopen = () => {
+      reconnectAttempts.current = 0;
+      setReadyState(WebSocket.OPEN);
+      setError(null);
+      if (debug) console.log('[WS] Connected');
+    };
 
-      ws.onerror = (error) => {
-        setError(error as Error);
-        toast({
-          title: "Connection Error",
-          description: "Failed to establish WebSocket connection",
-          variant: "destructive",
-        });
-      };
+    ws.current.onclose = (event) => {
+      setReadyState(WebSocket.CLOSED);
+      if (debug) console.log(`[WS] Disconnected: code=${event.code}, reason=${event.reason}`);
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          onMessage?.(data);
-        } catch (err) {
-          console.error('WebSocket message parse error:', err);
-        }
-      };
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectAttempts.current++;
+        if (debug) console.log(`[WS] Reconnecting in ${reconnectInterval}ms (attempt ${reconnectAttempts.current})`);
+        reconnectTimeout.current = setTimeout(connect, reconnectInterval);
+      } else if (debug) {
+        console.warn('[WS] Max reconnect attempts reached, giving up.');
+      }
+    };
 
-      setSocket(ws);
-    } catch (error) {
-      setError(error as Error);
-      console.error('WebSocket connection error:', error);
-    }
-  }, [url, reconnectAttempts, reconnectInterval, onMessage, toast]);
+    ws.current.onerror = (event) => {
+      // Create a meaningful Error object instead of unsafe casting
+      const errorMessage = `WebSocket error: ${event.type || 'Unknown error'}`;
+      setError(new Error(errorMessage));
+      setReadyState(WebSocket.CLOSING);
+      if (debug) console.error('[WS] Error encountered', event);
+      // onclose will follow onerror
+    };
+
+    ws.current.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setMessage(data);
+      } catch {
+        // If JSON parse fails, fallback to raw data
+        setMessage(event.data as any);
+      }
+    };
+  }, [url, debug, reconnectInterval, maxReconnectAttempts]);
 
   useEffect(() => {
     connect();
+
     return () => {
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.close();
-      }
+      if (debug) console.log('[WS] Cleanup: closing socket');
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      ws.current?.close();
     };
-  }, [connect]);
+  }, [connect, debug]);
 
-  const sendMessage = useCallback((data: any) => {
-    if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(data));
-    } else {
-      toast({
-        title: "Connection Error",
-        description: "Cannot send message: WebSocket is not connected",
-        variant: "destructive",
-      });
+  const sendMessage = useCallback((msg: any) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify(msg));
+      if (debug) console.log('[WS] Sent message', msg);
+    } else if (debug) {
+      console.warn('[WS] Cannot send message, socket not open:', msg);
     }
-  }, [socket, toast]);
+  }, [debug]);
 
-  return { socket, isConnected, error, sendMessage };
+  return { message, sendMessage, readyState, error };
 }

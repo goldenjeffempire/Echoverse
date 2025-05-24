@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
-import { Avatar } from '../ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { useToast } from '../../hooks/use-toast';
@@ -12,7 +12,7 @@ interface Post {
   authorId: number;
   author?: {
     username: string;
-    avatar: string;
+    avatar?: string; // made avatar optional for safety
   };
   likes: number;
   attachedImage?: string;
@@ -48,43 +48,26 @@ export default function EchoFeed() {
     try {
       const response = await fetch('/api/post', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: newPost,
-          visibility: 'public'
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newPost, visibility: 'public' }),
       });
 
       const data = await response.json();
       if (data.success) {
         setNewPost('');
         fetchPosts();
-        toast({
-          title: 'Success',
-          description: 'Post created successfully!',
-        });
+        toast({ title: 'Success', description: 'Post created successfully!' });
       }
     } catch (error) {
       console.error('Error creating post:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to create post',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to create post', variant: 'destructive' });
     }
   }
 
   async function handleLike(postId: number) {
     try {
-      const response = await fetch(`/api/post/${postId}/like`, {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        fetchPosts();
-      }
+      const response = await fetch(`/api/post/${postId}/like`, { method: 'POST' });
+      if (response.ok) fetchPosts();
     } catch (error) {
       console.error('Error liking post:', error);
     }
@@ -101,9 +84,7 @@ export default function EchoFeed() {
             className="w-full resize-none"
             rows={3}
           />
-          <Button type="submit" className="w-full">
-            Post
-          </Button>
+          <Button type="submit" className="w-full">Post</Button>
         </form>
       </Card>
 
@@ -111,9 +92,12 @@ export default function EchoFeed() {
         {posts.map((post) => (
           <Card key={post.id} className="p-4 space-y-4">
             <div className="flex items-center space-x-4">
-              <Avatar src={post.author?.avatar} fallback={post.author?.username?.[0] || 'U'} />
+              <Avatar>
+                <AvatarImage src={post.author?.avatar || '/default-avatar.png'} />
+                <AvatarFallback>{post.author?.username?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+              </Avatar>
               <div>
-                <h3 className="font-semibold">{post.author?.username}</h3>
+                <h3 className="font-semibold">{post.author?.username || 'Unknown User'}</h3>
                 <p className="text-sm text-gray-500">
                   {new Date(post.createdAt).toLocaleDateString()}
                 </p>
@@ -135,9 +119,7 @@ export default function EchoFeed() {
                 variant="ghost"
                 size="sm"
                 onClick={() => handleLike(post.id)}
-                className={`flex items-center space-x-1 ${
-                  post.hasLiked ? 'text-red-500' : ''
-                }`}
+                className={`flex items-center space-x-1 ${post.hasLiked ? 'text-red-500' : ''}`}
               >
                 <HeartIcon size={20} />
                 <span>{post.likes}</span>

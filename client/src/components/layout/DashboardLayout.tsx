@@ -1,3 +1,5 @@
+// client/src/components/layout/DashboardLayout.tsx
+
 import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./navbar";
@@ -11,7 +13,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isSidebarOpen, closeSidebar, toggleSidebar } = useSidebar();
   const [isMobile, setIsMobile] = useState(false);
 
-  // Track screen size to decide mobile or desktop layout
+  // Track viewport width for responsive behavior
   useEffect(() => {
     const checkIsMobile = () => setIsMobile(window.innerWidth < 768);
     checkIsMobile();
@@ -20,15 +22,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
-  // Close sidebar if clicking outside it (mobile only)
+  // Close sidebar if clicking outside (only on mobile)
   useEffect(() => {
+    if (!isMobile || !isSidebarOpen) return;
+
     const handleClickOutside = (e: MouseEvent) => {
       const sidebar = document.getElementById("sidebar");
       const mobileBtn = document.getElementById("mobile-menu-btn");
 
       if (
-        isMobile &&
-        isSidebarOpen &&
         sidebar &&
         !sidebar.contains(e.target as Node) &&
         mobileBtn &&
@@ -42,18 +44,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isMobile, isSidebarOpen, closeSidebar]);
 
-  // Load Material Icons (run once)
+  // Load Material Icons stylesheet once
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = "https://fonts.googleapis.com/icon?family=Material+Icons";
     document.head.appendChild(link);
-    return () => document.head.removeChild(link);
+
+    return () => {
+      document.head.removeChild(link);
+    };
   }, []);
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar panel: show/hide based on mobile + sidebar open */}
+      {/* Sidebar: fixed on mobile, relative on desktop */}
       <div
         id="sidebar"
         className={`${
@@ -63,7 +68,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <Sidebar />
       </div>
 
-      {/* Mobile overlay behind sidebar */}
+      {/* Mobile overlay to close sidebar on outside click */}
       {isMobile && isSidebarOpen && (
         <div
           id="sidebar-overlay"
@@ -72,9 +77,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         />
       )}
 
-      {/* Main content wrapper */}
+      {/* Main content area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Pass toggleSidebar to Navbar so it can control sidebar */}
         <Navbar toggleSidebar={toggleSidebar} isMobile={isMobile} />
         <main className="flex-1 overflow-auto bg-neutral-100 dark:bg-neutral-900 p-4 md:p-6">
           {children}
