@@ -1,86 +1,84 @@
+// server/services/openai.ts
 import OpenAI from 'openai';
+import NodeCache from 'node-cache';
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('Missing OPENAI_API_KEY environment variable');
-}
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+const cache = new NodeCache({ stdTTL: 300 }); // cache for 5 minutes
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export async function generateResponse({
+  prompt,
+  context = [],
+  model = 'gpt-3.5-turbo',
+  cacheKey,
+  stream = false,
+  onChunk,
+}: {
+  prompt: string;
+  context?: string[];
+  model?: string;
+  cacheKey?: string;
+  stream?: boolean;
+  onChunk?: (chunk: string) => void;
+}): Promise<string> {
+  if (!prompt) throw new Error("Prompt is required");
 
-export async function generateResponse(message: string, context: string[] = []): Promise<string> {
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { 
-          role: "system", 
-          content: "You are EchoTeacher, a helpful AI tutor. Provide clear, concise explanations." 
-        },
-        ...context.map((msg, i) => ({
-          role: (i % 2 === 0) ? "user" : "assistant",
-          content: msg
-        })),
-        { role: "user", content: message }
-      ],
-      temperature: 0.7,
-      max_tokens: 500
+  const key = cacheKey || `completion:${model}:${context.join('|')}|${prompt}`;
+
+  if (!stream && cache.has(key)) {
+    return cache.get<string>(key)!;
+  }
+
+  const messages = [
+    { role: "system", content: "You are EchoTeacher, a helpful AI tutor." },
+    ...context.map((msg, i) => ({
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: msg
+    })),
+    { role: "user", content: prompt }
+  ];
+
+  if (stream) {
+    const streamResponse = await openai.chat.completions.create({
+      model,
+      messages,
+      stream: true
     });
 
-    return completion.choices[0].message.content || "I apologize, but I couldn't generate a response.";
-  } catch (error: any) {
-    console.error('OpenAI API Error:', error);
-
-    // Handle rate limits
-    if (error?.status === 429) {
-      return "I apologize, but our AI service is currently at capacity. Please try again in a moment.";
+    let result = '';
+    for await (const chunk of streamResponse) {
+      const delta = chunk.choices[0]?.delta?.content || '';
+      result += delta;
+      onChunk?.(delta);
     }
 
-    // Handle other errors
-    return "I apologize, but I encountered an error while processing your request.";
+    cache.set(key, result);
+    return result;
   }
+
+  const completion = await openai.chat.completions.create({
+    model,
+    messages,
+    temperature: 0.7,
+    max_tokens: 500
+  });
+
+  const content = completion.choices[0].message.content || '';
+  cache.set(key, content);
+  return content;
 }
 
-/**
- * Analyze sentiment of a message
- * @param text Text to analyze
- * @returns Sentiment analysis result
- */
-export async function analyzeSentiment(text: string): Promise<{
-  sentiment: "positive" | "negative" | "neutral";
-  score: number;
-}> {
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a sentiment analysis expert. Analyze the sentiment of the text and provide a rating. Respond with JSON in this format: { 'sentiment': 'positive' | 'negative' | 'neutral', 'score': number between 0 and 1 }",
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
-      response_format: { type: "json_object" },
-    });
+export async function analyzeSentiment(text: string) {
+  const result = await generateResponse({
+    prompt: text,
+    context: [
+      "You are a sentiment analysis expert. Reply with JSON: { 'sentiment': 'positive' | 'negative' | 'neutral', 'score': 0-1 }"
+    ],
+    model: "gpt-3.5-turbo"
+  });
 
-    // Ensure we have a valid content string
-    const content = response.choices[0].message.content;
-    const contentString = typeof content === 'string' ? content : '{"sentiment": "neutral", "score": 0.5}';
-    const result = JSON.parse(contentString);
-    return {
-      sentiment: result.sentiment,
-      score: result.score,
-    };
-  } catch (error: any) {
-    console.error("Error analyzing sentiment:", error);
-    // Log the error but return a neutral sentiment
-    return {
-      sentiment: "neutral",
-      score: 0.5,
-    };
+  try {
+    return JSON.parse(result);
+  } catch {
+    return { sentiment: "neutral", score: 0.5 };
   }
 }

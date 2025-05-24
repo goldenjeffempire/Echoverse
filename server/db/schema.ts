@@ -1,9 +1,16 @@
+// server/db/schema.ts
 import { pgTable, text, serial, integer, boolean, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { PrismaClient } from '@prisma/client';
 
 // Enums
+type UserRole = 'work' | 'personal' | 'school' | 'general';
+type SubscriptionPlan = 'free' | 'basic' | 'pro' | 'family' | 'student' | 'enterprise';
+type ProjectStatus = 'on_track' | 'at_risk' | 'delayed' | 'completed';
+type TaskPriority = 'high' | 'medium' | 'normal' | 'low';
+
 export const userRoleEnum = pgEnum('user_role', ['work', 'personal', 'school', 'general']);
 export const subscriptionPlanEnum = pgEnum('subscription_plan', ['free', 'basic', 'pro', 'family', 'student', 'enterprise']);
 export const projectStatusEnum = pgEnum('project_status', ['on_track', 'at_risk', 'delayed', 'completed']);
@@ -52,13 +59,39 @@ export const schema = {
     createdAt: timestamp("created_at").defaultNow(),
   }),
 
-  // NEW: follows table for follower/followee relationship
   follows: pgTable("follows", {
     id: serial("id").primaryKey(),
-    followerId: integer("follower_id").notNull(),  // user who follows
-    followeeId: integer("followee_id").notNull(),  // user being followed
+    followerId: integer("follower_id").notNull(),
+    followeeId: integer("followee_id").notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   }),
 };
 
-export * from '../../shared/schema';
+// Drizzle insert schemas (for type safety and validation)
+export const insertUserSchema = createInsertSchema(schema.users);
+export const InsertUser = z.infer<typeof insertUserSchema>;
+export type User = z.infer<typeof insertUserSchema>;
+
+// Prisma seeding script (optional for production bootstrapping)
+const prisma = new PrismaClient();
+
+async function seedDatabase() {
+  try {
+    await prisma.user.create({
+      data: {
+        username: 'admin',
+        email: 'admin@example.com',
+        password: '$2b$10$hashpasswordhere', // replace with real bcrypt hash
+      },
+    });
+    console.log('Database seeded');
+  } catch (e) {
+    console.error('Error seeding database:', e);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+if (require.main === module) {
+  seedDatabase();
+}

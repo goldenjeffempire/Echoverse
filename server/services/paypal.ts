@@ -1,3 +1,4 @@
+// server/services/paypal.ts
 import {
   Client,
   Environment,
@@ -5,13 +6,13 @@ import {
   OAuthAuthorizationController,
   OrdersController
 } from "@paypal/paypal-server-sdk";
+import type { Express, Request, Response } from 'express';
+import { requireAuth } from '../auth';
+import axios from 'axios';
 
 // Check if we have PayPal credentials
-if (!process.env.PAYPAL_CLIENT_ID) {
-  throw new Error('Missing PAYPAL_CLIENT_ID environment variable');
-}
-if (!process.env.PAYPAL_CLIENT_SECRET) {
-  throw new Error('Missing PAYPAL_CLIENT_SECRET environment variable');
+if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
+  throw new Error('Missing PayPal environment variables');
 }
 
 // Initialize PayPal client
@@ -26,12 +27,8 @@ const client = new Client({
     : Environment.Sandbox,
   logging: {
     logLevel: LogLevel.Info,
-    logRequest: {
-      logBody: true,
-    },
-    logResponse: {
-      logHeaders: true,
-    },
+    logRequest: { logBody: true },
+    logResponse: { logHeaders: true },
   },
 });
 
@@ -39,10 +36,10 @@ const client = new Client({
 const ordersController = new OrdersController(client);
 const oAuthAuthorizationController = new OAuthAuthorizationController(client);
 
-/**
- * Generate client token for PayPal SDK initialization
- * @returns Client token
- */
+const base = process.env.NODE_ENV === 'production'
+  ? 'https://api-m.paypal.com'
+  : 'https://api-m.sandbox.paypal.com';
+
 export async function getClientToken() {
   const auth = Buffer.from(
     `${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`,
@@ -58,18 +55,10 @@ export async function getClientToken() {
   return result.accessToken;
 }
 
-/**
- * Create a PayPal order
- * @param amount Order amount
- * @param currency Currency code (default: 'USD')
- * @param intent Order intent (default: 'CAPTURE')
- * @returns Created order
- */
 export async function createOrder(amount: number, currency = 'USD', intent = 'CAPTURE') {
   try {
-    // Create a type-safe intent value
     const paymentIntent = intent === 'CAPTURE' ? 'CAPTURE' : 'AUTHORIZE';
-    
+
     const collect = {
       body: {
         intent: paymentIntent,
@@ -85,7 +74,7 @@ export async function createOrder(amount: number, currency = 'USD', intent = 'CA
       prefer: "return=minimal",
     };
 
-    const { body, ...httpResponse } = await ordersController.createOrder(collect);
+    const { body } = await ordersController.createOrder(collect);
     const jsonResponse = JSON.parse(String(body));
 
     return {
@@ -95,19 +84,10 @@ export async function createOrder(amount: number, currency = 'USD', intent = 'CA
     };
   } catch (error: unknown) {
     console.error('Failed to create PayPal order:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to create PayPal order: ${error.message}`);
-    } else {
-      throw new Error(`Failed to create PayPal order: ${String(error)}`);
-    }
+    throw new Error(`Failed to create PayPal order: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-/**
- * Capture a PayPal order (finalize payment)
- * @param orderId PayPal order ID
- * @returns Capture result
- */
 export async function captureOrder(orderId: string) {
   try {
     const collect = {
@@ -115,7 +95,7 @@ export async function captureOrder(orderId: string) {
       prefer: "return=minimal",
     };
 
-    const { body, ...httpResponse } = await ordersController.captureOrder(collect);
+    const { body } = await ordersController.captureOrder(collect);
     const jsonResponse = JSON.parse(String(body));
 
     return {
@@ -127,19 +107,10 @@ export async function captureOrder(orderId: string) {
     };
   } catch (error: unknown) {
     console.error('Failed to capture PayPal order:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to capture PayPal order: ${error.message}`);
-    } else {
-      throw new Error(`Failed to capture PayPal order: ${String(error)}`);
-    }
+    throw new Error(`Failed to capture PayPal order: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-/**
- * Get order details
- * @param orderId PayPal order ID
- * @returns Order details
- */
 export async function getOrder(orderId: string) {
   try {
     const collect = {
@@ -147,23 +118,55 @@ export async function getOrder(orderId: string) {
       prefer: "return=minimal",
     };
 
-    const { body, ...httpResponse } = await ordersController.getOrder(collect);
-    const jsonResponse = JSON.parse(String(body));
-
-    return jsonResponse;
+    const { body } = await ordersController.getOrder(collect);
+    return JSON.parse(String(body));
   } catch (error: unknown) {
     console.error('Failed to get PayPal order:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to get PayPal order: ${error.message}`);
-    } else {
-      throw new Error(`Failed to get PayPal order: ${String(error)}`);
-    }
+    throw new Error(`Failed to get PayPal order: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+export function setupPayPalRoutes(app: Express) {
+  app.post('/api/paypal/create-order', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const auth = await getAccessToken();
+      const order = await axios.post(
+        `${base}/v2/checkout/orders`,
+        {
+          intent: 'CAPTURE',
+          purchase_units: [{ amount: { currency_code: 'USD', value: '10.00' } }],
+        },
+        { headers: { Authorization: `Bearer ${auth}` } }
+      );
+      res.json(order.data);
+    } catch (err: any) {
+      console.error('PayPal order error:', err);
+      res.status(500).json({ error: 'Failed to create order' });
+    }
+  });
+}
+
+async function getAccessToken() {
+  const credentials = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+
+  const response = await axios.post(
+    `${base}/v1/oauth2/token`,
+    'grant_type=client_credentials',
+    {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    }
+  );
+
+  return response.data.access_token;
 }
 
 export default {
   getClientToken,
   createOrder,
   captureOrder,
-  getOrder
+  getOrder,
+  setupPayPalRoutes
 };

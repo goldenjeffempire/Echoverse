@@ -1,11 +1,23 @@
-import express, { type Request, Response, NextFunction } from "express";
-import cors from "cors";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+// server/index.ts
+import express, { Request, Response, NextFunction } from 'express';
+import dotenv from 'dotenv';
+import compression from 'compression';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import { registerRoutes } from './routes';
+import { setupVite, serveStatic, log } from './vite';
+
+dotenv.config();
 
 const app = express();
 
-// CORS configuration
+// Middleware setup
+app.use(helmet());
+app.use(compression());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? process.env.CLIENT_URL : '*',
   credentials: true
@@ -13,6 +25,41 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api', limiter);
+
+// Logging
+app.use(morgan('combined'));
+
+// Swagger setup
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'API Documentation',
+      version: '1.0.0',
+      description: 'Swagger API docs for the application'
+    },
+    servers: [
+      {
+        url: '/api/v1',
+        description: 'v1 Server'
+      }
+    ]
+  },
+  apis: ['./routes/**/*.ts'],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Request logger for API routes
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -47,68 +94,58 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('Server error:', err);
+    console.error('Server error:', err);
 
-  // Handle specific error types
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      status: 400,
-      message: 'Validation Error',
-      errors: err.errors,
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        status: 400,
+        message: 'Validation Error',
+        errors: err.errors,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    if (err.name === 'UnauthorizedError') {
+      return res.status(401).json({
+        status: 401,
+        message: 'Unauthorized',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    const errorId = Date.now().toString();
+
+    res.status(status).json({ 
+      message,
+      errorId,
+      status,
       timestamp: new Date().toISOString()
     });
-  }
-
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({
-      status: 401,
-      message: 'Unauthorized',
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // Generic error handler
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Internal Server Error";
-  const errorId = Date.now().toString();
-
-  res.status(status).json({ 
-    message,
-    errorId,
-    status,
-    timestamp: new Date().toISOString()
   });
-});
 
-// Enhance unhandled rejection handling
-process.on('unhandledRejection', (reason: any) => {
-  console.error('Unhandled Rejection:', reason);
-  // Optionally terminate the process in production
-  if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
-});
+  process.on('unhandledRejection', (reason: any) => {
+    console.error('Unhandled Rejection:', reason);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
 
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-});
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+  });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = 5000;
   server.listen({
     port,
