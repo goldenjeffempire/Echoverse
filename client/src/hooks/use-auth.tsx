@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // <-- useToast hook here
 import { ReactNode, useEffect } from "react";
 import { useLocation } from "wouter";
 
@@ -19,16 +19,6 @@ interface AuthState {
   setState: (state: Partial<AuthState>) => void;
 }
 
-async function handleAuthError(error: any) {
-  console.error("Auth error:", error);
-  toast({
-    title: "Authentication Error",
-    description: error.message || "An unexpected error occurred",
-    variant: "destructive",
-  });
-  throw error;
-}
-
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
@@ -37,8 +27,19 @@ export const useAuthStore = create<AuthState>((set) => ({
 }));
 
 export function useAuth() {
+  const { toast } = useToast(); // <-- grab toast from context here
   const { user, isLoading } = useAuthStore();
   const isAuthenticated = !!user;
+
+  async function handleAuthError(error: any) {
+    console.error("Auth error:", error);
+    toast({
+      title: "Authentication Error",
+      description: error.message || "An unexpected error occurred",
+      variant: "destructive",
+    });
+    throw error;
+  }
 
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
@@ -86,7 +87,7 @@ export function useAuth() {
       });
       useAuthStore.setState({ user: null });
     } catch (error) {
-      handleAuthError(error);
+      await handleAuthError(error);
     }
   };
 
