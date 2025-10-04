@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,24 +13,67 @@ import {
   Sparkles,
   ArrowUpRight
 } from "lucide-react"
+import { apiClient } from "@/lib/api"
+
+interface StatsData {
+  revenue: string;
+  users: string;
+  orders: string;
+  pages: string;
+  growth: string;
+  activeUsers: string;
+}
+
+interface Activity {
+  type: string;
+  content: string;
+  time: string;
+}
 
 export function Dashboard() {
-  // TODO: Remove mock data - replace with real analytics
-  const [stats] = useState({
-    revenue: "$12,345",
-    users: "1,234",
-    orders: "89",
-    pages: "45",
-    growth: "+12.5%",
-    activeUsers: "234"
+  const { data: analyticsData } = useQuery<StatsData>({
+    queryKey: ['/api/analytics/stats'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get<StatsData>('/api/analytics/stats');
+        return response;
+      } catch {
+        return {
+          revenue: "$0",
+          users: "0",
+          orders: "0",
+          pages: "0",
+          growth: "+0%",
+          activeUsers: "0"
+        };
+      }
+    },
+    refetchInterval: 30000
   })
 
-  const [recentActivity] = useState([
-    { type: "ai-generated", content: "Landing page created with AI", time: "2 minutes ago" },
-    { type: "order", content: "New order from Sarah Johnson", time: "5 minutes ago" },
-    { type: "user", content: "3 new user registrations", time: "10 minutes ago" },
-    { type: "content", content: "Blog post published", time: "1 hour ago" },
-  ])
+  const { data: activityData } = useQuery<Activity[]>({
+    queryKey: ['/api/analytics/activity'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get<{ activities: Activity[] }>('/api/analytics/activity');
+        return response.activities || [];
+      } catch {
+        return [];
+      }
+    },
+    refetchInterval: 10000
+  })
+
+  const stats: StatsData = analyticsData || {
+    revenue: "$0",
+    users: "0",
+    orders: "0",
+    pages: "0",
+    growth: "+0%",
+    activeUsers: "0"
+  }
+
+  const recentActivity: Activity[] = activityData || []
 
   return (
     <div className="space-y-6">

@@ -2,7 +2,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Sparkles, Zap, Globe, ShoppingCart, MessageSquare, TrendingUp, Puzzle, Shield, Smartphone } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ArrowRight, Sparkles, Zap, Globe, ShoppingCart, MessageSquare, TrendingUp, Puzzle, Shield, Smartphone, Check, Star, Users, Rocket, BarChart, Code } from "lucide-react";
 import { useLocation } from "wouter";
 
 const fadeInUp = {
@@ -63,6 +64,130 @@ const stats = [
   { number: "$2M+", label: "Revenue Generated" },
   { number: "50+", label: "AI Models" },
   { number: "99.9%", label: "Uptime" }
+];
+
+const howItWorks = [
+  {
+    step: "1",
+    icon: Rocket,
+    title: "Describe Your Vision",
+    description: "Tell our AI what you want to build using natural language. No coding required.",
+    color: "bg-blue-500"
+  },
+  {
+    step: "2",
+    icon: Code,
+    title: "AI Generates & Customizes",
+    description: "Watch as our AI creates your website, store, or community in seconds. Customize every detail.",
+    color: "bg-purple-500"
+  },
+  {
+    step: "3",
+    icon: BarChart,
+    title: "Launch & Scale",
+    description: "Publish instantly to web, iOS, and Android. Grow with built-in analytics and marketing tools.",
+    color: "bg-green-500"
+  }
+];
+
+const testimonials = [
+  {
+    name: "Sarah Chen",
+    role: "E-commerce Entrepreneur",
+    content: "EchoVerse transformed my online store. The AI builder created a stunning site in minutes, and sales increased 300% in the first month!",
+    avatar: "SC",
+    rating: 5
+  },
+  {
+    name: "Marcus Rodriguez",
+    role: "Content Creator",
+    content: "The community features are incredible. I built a thriving membership site with 5,000+ members using just the AI tools.",
+    avatar: "MR",
+    rating: 5
+  },
+  {
+    name: "Emily Watson",
+    role: "Digital Marketer",
+    content: "Marketing automation that actually works! The A/B testing and funnel builder doubled my conversion rates.",
+    avatar: "EW",
+    rating: 5
+  }
+];
+
+const pricingPlans = [
+  {
+    name: "Starter",
+    price: "$29",
+    period: "/month",
+    description: "Perfect for individuals and small projects",
+    features: [
+      "5 AI-generated websites",
+      "Basic e-commerce (100 products)",
+      "Community features",
+      "Email support",
+      "50GB storage"
+    ],
+    popular: false
+  },
+  {
+    name: "Professional",
+    price: "$99",
+    period: "/month",
+    description: "For growing businesses and creators",
+    features: [
+      "Unlimited AI websites",
+      "Advanced e-commerce (unlimited)",
+      "Full marketing automation",
+      "Priority support",
+      "500GB storage",
+      "Custom domain",
+      "API access"
+    ],
+    popular: true
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    period: "",
+    description: "For large organizations",
+    features: [
+      "Everything in Professional",
+      "Dedicated account manager",
+      "Custom integrations",
+      "White-label options",
+      "Unlimited storage",
+      "SLA guarantee",
+      "Advanced security"
+    ],
+    popular: false
+  }
+];
+
+const useCases = [
+  {
+    icon: ShoppingCart,
+    title: "E-Commerce Stores",
+    description: "Build and scale online stores with AI-powered inventory management and checkout.",
+    color: "from-green-500 to-emerald-600"
+  },
+  {
+    icon: Users,
+    title: "Membership Sites",
+    description: "Create thriving communities with forums, chatbots, and member management.",
+    color: "from-purple-500 to-pink-600"
+  },
+  {
+    icon: Globe,
+    title: "Business Websites",
+    description: "Professional websites that convert visitors into customers with AI optimization.",
+    color: "from-blue-500 to-cyan-600"
+  },
+  {
+    icon: MessageSquare,
+    title: "Content Platforms",
+    description: "Launch blogs and content hubs with AI writing assistance and SEO tools.",
+    color: "from-orange-500 to-red-600"
+  }
 ];
 
 export default function HomePage() {
@@ -243,6 +368,239 @@ export default function HomePage() {
                     <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                       {feature.description}
                     </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 dark:text-white">
+              How It Works
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto">
+              From idea to launch in three simple steps
+            </p>
+          </motion.div>
+
+          <motion.div 
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            className="grid md:grid-cols-3 gap-8"
+          >
+            {howItWorks.map((step, index) => (
+              <motion.div key={index} variants={fadeInUp} className="relative">
+                <Card className="h-full border-0 bg-white dark:bg-slate-800">
+                  <CardContent className="p-6 text-center">
+                    <div className="relative inline-block mb-6">
+                      <div className={`w-16 h-16 ${step.color} rounded-full flex items-center justify-center`}>
+                        <step.icon className="w-8 h-8 text-white" />
+                      </div>
+                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold">
+                        {step.step}
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-3 text-slate-900 dark:text-white">
+                      {step.title}
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-300">
+                      {step.description}
+                    </p>
+                  </CardContent>
+                </Card>
+                {index < howItWorks.length - 1 && (
+                  <div className="hidden md:block absolute top-1/2 -right-4 transform -translate-y-1/2">
+                    <ArrowRight className="w-8 h-8 text-blue-400" />
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Use Cases Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 dark:text-white">
+              Built for Every Business Type
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto">
+              Whatever you're building, EchoVerse has the tools you need
+            </p>
+          </motion.div>
+
+          <motion.div 
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            className="grid md:grid-cols-2 gap-6"
+          >
+            {useCases.map((useCase, index) => (
+              <motion.div key={index} variants={fadeInUp}>
+                <Card className={`h-full border-0 bg-gradient-to-br ${useCase.color} p-6 text-white hover:scale-105 transition-transform duration-300`}>
+                  <CardContent className="p-0">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                        <useCase.icon className="w-6 h-6" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-2xl font-semibold mb-2">
+                          {useCase.title}
+                        </h3>
+                        <p className="opacity-90">
+                          {useCase.description}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 dark:text-white">
+              Loved by Creators Worldwide
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-300">
+              See what our users are saying
+            </p>
+          </motion.div>
+
+          <motion.div 
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            className="grid md:grid-cols-3 gap-8"
+          >
+            {testimonials.map((testimonial, index) => (
+              <motion.div key={index} variants={fadeInUp}>
+                <Card className="h-full border-0 bg-white dark:bg-slate-800">
+                  <CardContent className="p-6">
+                    <div className="flex gap-1 mb-4">
+                      {[...Array(testimonial.rating)].map((_, i) => (
+                        <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+                      ))}
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-300 mb-6 italic">
+                      "{testimonial.content}"
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback className="bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
+                          {testimonial.avatar}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-white">
+                          {testimonial.name}
+                        </div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">
+                          {testimonial.role}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 dark:text-white">
+              Simple, Transparent Pricing
+            </h2>
+            <p className="text-xl text-slate-600 dark:text-slate-300">
+              Choose the perfect plan for your needs
+            </p>
+          </motion.div>
+
+          <motion.div 
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+            className="grid md:grid-cols-3 gap-8"
+          >
+            {pricingPlans.map((plan, index) => (
+              <motion.div key={index} variants={fadeInUp}>
+                <Card className={`h-full ${plan.popular ? 'border-2 border-blue-500 shadow-xl scale-105' : 'border-0'} bg-white dark:bg-slate-800 relative`}>
+                  {plan.popular && (
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                      <Badge className="bg-blue-500 text-white px-4 py-1">Most Popular</Badge>
+                    </div>
+                  )}
+                  <CardContent className="p-6">
+                    <h3 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">
+                      {plan.name}
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-4">
+                      {plan.description}
+                    </p>
+                    <div className="mb-6">
+                      <span className="text-4xl font-bold text-slate-900 dark:text-white">
+                        {plan.price}
+                      </span>
+                      <span className="text-slate-600 dark:text-slate-400">
+                        {plan.period}
+                      </span>
+                    </div>
+                    <ul className="space-y-3 mb-6">
+                      {plan.features.map((feature, i) => (
+                        <li key={i} className="flex items-start gap-2 text-slate-700 dark:text-slate-300">
+                          <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Button 
+                      className={`w-full ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                      variant={plan.popular ? 'default' : 'outline'}
+                      onClick={() => setLocation('/ai-builder')}
+                    >
+                      Get Started
+                    </Button>
                   </CardContent>
                 </Card>
               </motion.div>

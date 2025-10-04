@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/hooks/use-toast"
 import { 
   Bot, 
   Sparkles, 
@@ -20,29 +21,237 @@ import {
   Share
 } from "lucide-react"
 
+interface GeneratedWebsite {
+  name: string;
+  pages: any[];
+  theme: any;
+  navigation: any;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  preview: string;
+}
+
 export function AIWebsiteBuilder() {
   const [prompt, setPrompt] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [viewMode, setViewMode] = useState<"desktop" | "tablet" | "mobile">("desktop")
+  const [generatedWebsite, setGeneratedWebsite] = useState<GeneratedWebsite | null>(null)
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false)
+  const { toast } = useToast()
 
-  // TODO: Remove mock templates - replace with real template data
-  const [templates] = useState([
-    { id: 1, name: "Business Landing", category: "Business", preview: "Modern business template" },
-    { id: 2, name: "E-commerce Store", category: "E-commerce", preview: "Online store template" },
-    { id: 3, name: "Portfolio", category: "Creative", preview: "Creative portfolio template" },
-    { id: 4, name: "Blog", category: "Content", preview: "Content-focused blog template" },
-  ])
+  useEffect(() => {
+    loadTemplates()
+  }, [])
 
-  const handleGenerate = () => {
-    console.log("Generate website triggered:", prompt)
-    setIsGenerating(true)
-    // TODO: Implement AI website generation
-    setTimeout(() => setIsGenerating(false), 2000)
+  const loadTemplates = async () => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to access templates.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoadingTemplates(true)
+    try {
+      const industries = ['business', 'ecommerce', 'portfolio', 'blog']
+      const templatePromises = industries.map(async (industry) => {
+        const response = await fetch('/api/ai/generate-template', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            industry,
+            style: 'modern',
+            features: ['responsive', 'seo-optimized']
+          }),
+        })
+        
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Authentication failed')
+        }
+        
+        if (response.ok) {
+          const data = await response.json()
+          return data.template
+        }
+        return null
+      })
+      
+      const loadedTemplates = await Promise.all(templatePromises)
+      const validTemplates = loadedTemplates.filter(t => t !== null)
+      
+      if (validTemplates.length === 0) {
+        toast({
+          title: "Templates Unavailable",
+          description: "Unable to load templates. Please try again later.",
+          variant: "destructive",
+        })
+      } else {
+        setTemplates(validTemplates)
+      }
+    } catch (error: any) {
+      if (error.message === 'Authentication failed') {
+        toast({
+          title: "Session Expired",
+          description: "Your session has expired. Please log in again.",
+          variant: "destructive",
+        })
+        localStorage.removeItem('accessToken')
+      } else {
+        toast({
+          title: "Error Loading Templates",
+          description: "Failed to load templates. Please check your connection and try again.",
+          variant: "destructive",
+        })
+      }
+      setTemplates([])
+    } finally {
+      setIsLoadingTemplates(false)
+    }
   }
 
-  const handleTemplateSelect = (templateId: number) => {
-    console.log("Template selected:", templateId)
-    // TODO: Implement template selection
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return
+    
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to generate websites.",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    setIsGenerating(true)
+    try {
+      const response = await fetch('/api/ai/generate-complete-website', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          description: prompt,
+          businessType: 'general',
+          style: 'modern',
+          pages: ['home', 'about', 'contact'],
+          colorScheme: 'professional',
+          features: ['responsive', 'seo-optimized']
+        }),
+      })
+
+      if (response.status === 401 || response.status === 403) {
+        toast({
+          title: "Session Expired",
+          description: "Your session has expired. Please log in again.",
+          variant: "destructive",
+        })
+        localStorage.removeItem('accessToken')
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        setGeneratedWebsite(data.website)
+        setPrompt("")
+        toast({
+          title: "Website Generated!",
+          description: "Your AI-powered website has been created successfully.",
+        })
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Generation Failed",
+          description: error.message || "Failed to generate website. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error generating website:', error)
+      toast({
+        title: "Network Error",
+        description: "Unable to connect to the server. Please check your connection.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleTemplateSelect = async (template: Template) => {
+    const token = localStorage.getItem('accessToken')
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to use templates.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/ai/generate-component', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type: 'hero',
+          description: `Create a ${template.name} layout based on ${template.description}`,
+          style: 'modern',
+          content: template.preview
+        }),
+      })
+
+      if (response.status === 401 || response.status === 403) {
+        toast({
+          title: "Session Expired",
+          description: "Your session has expired. Please log in again.",
+          variant: "destructive",
+        })
+        localStorage.removeItem('accessToken')
+        return
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        setGeneratedWebsite({
+          name: template.name,
+          pages: [],
+          theme: {},
+          navigation: {}
+        })
+        toast({
+          title: "Template Loaded",
+          description: `${template.name} template is ready for customization.`,
+        })
+      } else {
+        toast({
+          title: "Template Load Failed",
+          description: "Unable to load template. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load template. Please check your connection.",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -125,20 +334,26 @@ export function AIWebsiteBuilder() {
               <CardDescription>Start with pre-built templates and customize them</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {templates.map((template) => (
-                  <Card key={template.id} className="hover-elevate cursor-pointer" onClick={() => handleTemplateSelect(template.id)}>
-                    <CardContent className="p-4">
-                      <div className="aspect-video bg-muted rounded-md mb-3 flex items-center justify-center">
-                        <Layout className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <h3 className="font-medium mb-1">{template.name}</h3>
-                      <Badge variant="secondary" className="text-xs mb-2">{template.category}</Badge>
-                      <p className="text-xs text-muted-foreground">{template.preview}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {isLoadingTemplates ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {templates.map((template) => (
+                    <Card key={template.id} className="hover-elevate cursor-pointer" onClick={() => handleTemplateSelect(template)}>
+                      <CardContent className="p-4">
+                        <div className="aspect-video bg-muted rounded-md mb-3 flex items-center justify-center">
+                          <Layout className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <h3 className="font-medium mb-1">{template.name}</h3>
+                        <Badge variant="secondary" className="text-xs mb-2">{template.category}</Badge>
+                        <p className="text-xs text-muted-foreground">{template.preview || template.description}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

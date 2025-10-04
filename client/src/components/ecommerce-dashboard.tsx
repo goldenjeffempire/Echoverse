@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,22 +23,63 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { api } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
+
+interface Product {
+  id: string
+  name: string
+  description: string
+  price: number
+  stock: number
+  category?: string
+  imageUrl?: string
+  userId: string
+}
+
+interface Order {
+  id: string
+  userId: string
+  status: string
+  totalAmount: number
+  customerEmail: string
+  createdAt: string
+}
 
 export function EcommerceDashboard() {
-  // TODO: Remove mock data - replace with real e-commerce data
-  const [products] = useState([
-    { id: 1, name: "Wireless Headphones", price: "$99.99", stock: 45, status: "active", sales: 234 },
-    { id: 2, name: "Smart Watch", price: "$299.99", stock: 12, status: "active", sales: 156 },
-    { id: 3, name: "Laptop Stand", price: "$49.99", stock: 0, status: "out_of_stock", sales: 89 },
-    { id: 4, name: "USB-C Cable", price: "$19.99", stock: 78, status: "active", sales: 445 },
-  ])
+  const [products, setProducts] = useState<Product[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
-  const [orders] = useState([
-    { id: "#3421", customer: "Sarah Johnson", total: "$299.99", status: "processing", date: "2024-01-15" },
-    { id: "#3420", customer: "Mike Chen", total: "$149.98", status: "shipped", date: "2024-01-15" },
-    { id: "#3419", customer: "Emma Davis", total: "$99.99", status: "delivered", date: "2024-01-14" },
-    { id: "#3418", customer: "John Wilson", total: "$49.99", status: "pending", date: "2024-01-14" },
-  ])
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      const [productsRes, ordersRes] = await Promise.all([
+        api.get('/products'),
+        api.get('/orders')
+      ])
+      
+      setProducts((productsRes as any).products || [])
+      setOrders((ordersRes as any).orders || [])
+    } catch (error: any) {
+      toast({
+        title: "Error loading data",
+        description: error.message || "Failed to load e-commerce data",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0)
+  const outOfStock = products.filter(p => p.stock === 0).length
+  const pendingOrders = orders.filter(o => o.status === 'pending').length
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -50,6 +91,16 @@ export function EcommerceDashboard() {
       pending: "outline"
     } as const
     return variants[status as keyof typeof variants] || "default"
+  }
+
+  const getProductStatus = (stock: number) => stock > 0 ? 'active' : 'out_of_stock'
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-muted-foreground">Loading e-commerce data...</p>
+      </div>
+    )
   }
 
   return (
@@ -76,8 +127,10 @@ export function EcommerceDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-revenue">$45,231</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+            <div className="text-2xl font-bold" data-testid="text-total-revenue">
+              ${totalRevenue.toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground">From {orders.length} orders</p>
           </CardContent>
         </Card>
         <Card>
@@ -87,7 +140,7 @@ export function EcommerceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-total-products">{products.length}</div>
-            <p className="text-xs text-muted-foreground">3 out of stock</p>
+            <p className="text-xs text-muted-foreground">{outOfStock} out of stock</p>
           </CardContent>
         </Card>
         <Card>
@@ -97,7 +150,7 @@ export function EcommerceDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-total-orders">{orders.length}</div>
-            <p className="text-xs text-muted-foreground">2 pending fulfillment</p>
+            <p className="text-xs text-muted-foreground">{pendingOrders} pending fulfillment</p>
           </CardContent>
         </Card>
         <Card>
@@ -106,8 +159,8 @@ export function EcommerceDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-conversion-rate">3.2%</div>
-            <p className="text-xs text-muted-foreground">+0.8% from last week</p>
+            <div className="text-2xl font-bold" data-testid="text-conversion-rate">--</div>
+            <p className="text-xs text-muted-foreground">Calculate from analytics</p>
           </CardContent>
         </Card>
       </div>
@@ -124,48 +177,53 @@ export function EcommerceDashboard() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>Product Catalog</CardTitle>
+                <div>
+                  <CardTitle>Products</CardTitle>
+                  <CardDescription>Manage your product catalog</CardDescription>
+                </div>
                 <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
-                    <Input placeholder="Search products..." className="pl-9" data-testid="input-search-products" />
-                  </div>
+                  <Input placeholder="Search products..." className="w-64" />
+                  <Button variant="outline" size="icon" aria-label="Search products">
+                    <Search className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Sales</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[70px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((product) => (
-                    <TableRow key={product.id} data-testid={`product-row-${product.id}`}>
-                      <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell>{product.price}</TableCell>
-                      <TableCell>{product.stock}</TableCell>
-                      <TableCell>{product.sales}</TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadge(product.status)}>
-                          {product.status.replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" data-testid={`button-product-actions-${product.id}`}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+              {products.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No products yet. Create your first product to get started.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {products.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell>${product.price.toFixed(2)}</TableCell>
+                        <TableCell>{product.stock}</TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusBadge(getProductStatus(product.stock))}>
+                            {getProductStatus(product.stock).replace('_', ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" aria-label="Product actions">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -174,68 +232,64 @@ export function EcommerceDashboard() {
           <Card>
             <CardHeader>
               <CardTitle>Recent Orders</CardTitle>
-              <CardDescription>Manage and track customer orders</CardDescription>
+              <CardDescription>Track and manage customer orders</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Order ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="w-[70px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {orders.map((order) => (
-                    <TableRow key={order.id} data-testid={`order-row-${order.id.replace('#', '')}`}>
-                      <TableCell className="font-medium">{order.id}</TableCell>
-                      <TableCell>{order.customer}</TableCell>
-                      <TableCell>{order.total}</TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadge(order.status)}>
-                          {order.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{order.date}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" data-testid={`button-order-view-${order.id.replace('#', '')}`}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+              {orders.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No orders yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {orders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-mono">#{order.id.slice(0, 8)}</TableCell>
+                        <TableCell>{order.customerEmail}</TableCell>
+                        <TableCell>${order.totalAmount.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusBadge(order.status)}>
+                            {order.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{new Date(order.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="icon" aria-label="View order details">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="customers" className="space-y-6">
+        <TabsContent value="customers">
           <Card>
             <CardHeader>
-              <CardTitle>Customer Management</CardTitle>
-              <CardDescription>View and manage customer relationships</CardDescription>
+              <CardTitle>Customers</CardTitle>
+              <CardDescription>Customer information coming soon</CardDescription>
             </CardHeader>
-            <CardContent className="text-center py-12">
-              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Customer management features coming soon</p>
-            </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
+        <TabsContent value="analytics">
           <Card>
             <CardHeader>
               <CardTitle>Sales Analytics</CardTitle>
-              <CardDescription>Track performance and identify trends</CardDescription>
+              <CardDescription>Detailed analytics coming soon</CardDescription>
             </CardHeader>
-            <CardContent className="text-center py-12">
-              <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Analytics dashboard coming soon</p>
-            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>

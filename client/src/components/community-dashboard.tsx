@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,77 +27,71 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Community } from "@/types"
+
+interface Discussion {
+  id: string
+  title: string
+  author: string
+  category: string
+  replies: number
+  likes: number
+  status: string
+  lastActivity: string
+}
+
+interface Member {
+  id: string
+  name: string
+  username: string
+  email: string
+  role: string
+  posts: number
+  reputation: number
+  joinDate: string
+  joinedAt: string
+  activity: string
+}
+
+interface Report {
+  id: string
+  type: string
+  content: string
+  reporter: string
+  status: string
+  createdAt: string
+}
 
 export function CommunityDashboard() {
-  // TODO: Remove mock data - replace with real community data
-  const [discussions] = useState([
-    { 
-      id: 1, 
-      title: "How to integrate AI into existing workflows?", 
-      author: "Sarah Johnson",
-      replies: 23,
-      likes: 45,
-      category: "AI Tools",
-      lastActivity: "2 hours ago",
-      status: "active"
-    },
-    { 
-      id: 2, 
-      title: "Best practices for e-commerce SEO", 
-      author: "Mike Chen",
-      replies: 12,
-      likes: 28,
-      category: "E-commerce",
-      lastActivity: "4 hours ago",
-      status: "active"
-    },
-    { 
-      id: 3, 
-      title: "Community guidelines update", 
-      author: "Admin",
-      replies: 8,
-      likes: 67,
-      category: "Announcements",
-      lastActivity: "1 day ago",
-      status: "pinned"
-    },
-  ])
+  const [communities, setCommunities] = useState<Community[]>([])
+  const [discussions, setDiscussions] = useState<Discussion[]>([])
+  const [members, setMembers] = useState<Member[]>([])
+  const [reports, setReports] = useState<Report[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [members] = useState([
-    { 
-      id: 1, 
-      name: "Sarah Johnson", 
-      username: "@sarah_j",
-      role: "Pro Member",
-      joinDate: "Jan 2024",
-      posts: 45,
-      reputation: 892
-    },
-    { 
-      id: 2, 
-      name: "Mike Chen", 
-      username: "@mike_c",
-      role: "Member",
-      joinDate: "Dec 2023",
-      posts: 23,
-      reputation: 456
-    },
-    { 
-      id: 3, 
-      name: "Emma Davis", 
-      username: "@emma_d",
-      role: "Moderator",
-      joinDate: "Nov 2023",
-      posts: 78,
-      reputation: 1234
-    },
-  ])
+  const fetchCommunities = async () => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch('/api/communities?limit=20&offset=0', {
+        headers: token ? {
+          'Authorization': `Bearer ${token}`
+        } : {}
+      })
+      if (response.ok) {
+        const data: { communities: Community[] } = await response.json()
+        setCommunities(data.communities || [])
+      }
+    } catch (error) {
+      console.error('Error fetching communities:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-  const [reports] = useState([
-    { id: 1, type: "spam", content: "Inappropriate promotion", reporter: "User123", status: "pending" },
-    { id: 2, type: "harassment", content: "Offensive language", reporter: "User456", status: "resolved" },
-    { id: 3, type: "off-topic", content: "Unrelated discussion", reporter: "User789", status: "pending" },
-  ])
+  useEffect(() => {
+    fetchCommunities()
+  }, [])
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -214,7 +208,7 @@ export function CommunityDashboard() {
                 {discussions.map((discussion) => (
                   <div key={discussion.id} className="flex items-start gap-4 p-4 border rounded-lg hover-elevate" data-testid={`discussion-${discussion.id}`}>
                     <Avatar>
-                      <AvatarFallback>{discussion.author.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                      <AvatarFallback>{discussion.author.split(' ').map((n: string) => n[0]).join('')}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-2">
                       <div className="flex items-start justify-between">
@@ -271,7 +265,7 @@ export function CommunityDashboard() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar>
-                            <AvatarFallback>{member.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                            <AvatarFallback>{member.name.split(' ').map((n: string) => n[0]).join('')}</AvatarFallback>
                           </Avatar>
                           <div>
                             <div className="font-medium">{member.name}</div>

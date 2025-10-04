@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,70 +29,57 @@ import {
 } from "@/components/ui/table"
 
 export function MarketingDashboard() {
-  // TODO: Remove mock data - replace with real marketing data
-  const [campaigns] = useState([
-    { 
-      id: 1, 
-      name: "Summer Product Launch", 
-      type: "Email",
-      status: "active",
-      opens: 1234,
-      clicks: 456,
-      conversions: 89,
-      budget: "$2,500",
-      spent: "$1,890"
-    },
-    { 
-      id: 2, 
-      name: "Social Media Boost", 
-      type: "Social",
-      status: "paused",
-      opens: 5678,
-      clicks: 890,
-      conversions: 123,
-      budget: "$5,000",
-      spent: "$3,200"
-    },
-    { 
-      id: 3, 
-      name: "Website Retargeting", 
-      type: "Display",
-      status: "active",
-      opens: 3456,
-      clicks: 234,
-      conversions: 67,
-      budget: "$1,800",
-      spent: "$1,200"
-    },
-  ])
+  const [campaigns, setCampaigns] = useState<any[]>([])
+  const [leads, setLeads] = useState<any[]>([])
+  const [funnels, setFunnels] = useState<any[]>([])
+  const [segments, setSegments] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [funnels] = useState([
-    { 
-      id: 1, 
-      name: "Lead Magnet Funnel",
-      visitors: 5432,
-      leads: 1234,
-      customers: 89,
-      conversionRate: "1.6%",
-      status: "active"
-    },
-    { 
-      id: 2, 
-      name: "Product Demo Funnel",
-      visitors: 2345,
-      leads: 678,
-      customers: 45,
-      conversionRate: "1.9%",
-      status: "active"
-    },
-  ])
+  const fetchCampaigns = async () => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) return
 
-  const [segments] = useState([
-    { id: 1, name: "New Subscribers", count: 1234, growth: "+12%" },
-    { id: 2, name: "Active Customers", count: 567, growth: "+8%" },
-    { id: 3, name: "Inactive Users", count: 890, growth: "-5%" },
-    { id: 4, name: "High Value", count: 123, growth: "+15%" },
-  ])
+      const response = await fetch('/api/campaigns', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setCampaigns(data.campaigns || [])
+      }
+    } catch (error) {
+      console.error('Error fetching campaigns:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchLeads = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) return
+
+      const response = await fetch('/api/leads', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setLeads(data.leads || [])
+      }
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchCampaigns()
+    fetchLeads()
+  }, [])
 
   const getStatusBadge = (status: string) => {
     const variants = {

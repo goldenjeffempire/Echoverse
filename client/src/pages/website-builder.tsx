@@ -156,6 +156,8 @@ export default function WebsiteBuilder() {
     features: []
   });
   const [pageComponents, setPageComponents] = useState<Component[]>([]);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [selectedComponent, setSelectedComponent] = useState<Component | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -209,8 +211,8 @@ export default function WebsiteBuilder() {
   }, [selectedPage, websiteData]);
 
   const handleEditComponent = useCallback((component: Component) => {
-    // TODO: Open component editor modal
-    alert(`Edit component: ${component.name}`);
+    setSelectedComponent(component);
+    setIsEditorOpen(true);
   }, []);
 
   const handleDeleteComponent = useCallback((index: number) => {

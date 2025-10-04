@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,70 +19,68 @@ import {
   TrendingUp,
   Users
 } from "lucide-react"
+import { Plugin } from "@/types"
+
+interface Category {
+  name: string
+  count: number
+  icon: React.ComponentType<{ className?: string }>
+}
 
 export function Marketplace() {
-  // TODO: Remove mock data - replace with real marketplace data
-  const [plugins] = useState([
-    { 
-      id: 1, 
-      name: "Advanced Analytics Pro", 
-      developer: "DataViz Studios",
-      category: "Analytics",
-      price: "$29/month",
-      rating: 4.8,
-      downloads: 1234,
-      description: "Comprehensive analytics dashboard with AI insights",
-      featured: true
-    },
-    { 
-      id: 2, 
-      name: "Social Media Connector", 
-      developer: "SocialTech Inc",
-      category: "Integration",
-      price: "Free",
-      rating: 4.5,
-      downloads: 5678,
-      description: "Connect and manage multiple social media platforms",
-      featured: false
-    },
-    { 
-      id: 3, 
-      name: "Custom Theme Builder", 
-      developer: "Design Co",
-      category: "Design",
-      price: "$19/month",
-      rating: 4.7,
-      downloads: 892,
-      description: "Create stunning custom themes with drag-and-drop",
-      featured: true
-    },
-    { 
-      id: 4, 
-      name: "AI Content Generator", 
-      developer: "ContentAI",
-      category: "Content",
-      price: "$39/month",
-      rating: 4.9,
-      downloads: 2345,
-      description: "Generate high-quality content with advanced AI",
-      featured: true
-    },
-  ])
+  const [plugins, setPlugins] = useState<Plugin[]>([])
+  const [installedPlugins, setInstalledPlugins] = useState<Plugin[]>([])
+  const [myPlugins, setMyPlugins] = useState<Plugin[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [categories] = useState([
-    { name: "Analytics", count: 24, icon: TrendingUp },
-    { name: "Design", count: 18, icon: Palette },
-    { name: "Integration", count: 32, icon: Zap },
-    { name: "Security", count: 12, icon: Shield },
-    { name: "Content", count: 15, icon: Code },
-    { name: "Social", count: 9, icon: Users },
-  ])
+  const fetchPlugins = async () => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch('/api/plugins?limit=20&offset=0', {
+        headers: token ? {
+          'Authorization': `Bearer ${token}`
+        } : {}
+      })
+      if (response.ok) {
+        const data: { plugins: Plugin[] } = await response.json()
+        setPlugins(data.plugins || [])
+      }
+    } catch (error) {
+      console.error('Error fetching plugins:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-  const [myPlugins] = useState([
-    { id: 1, name: "Social Media Connector", status: "active", version: "2.1.0", lastUpdate: "2024-01-10" },
-    { id: 2, name: "Advanced Analytics Pro", status: "active", version: "1.5.2", lastUpdate: "2024-01-08" },
-    { id: 3, name: "Custom Theme Builder", status: "inactive", version: "3.2.1", lastUpdate: "2024-01-05" },
-  ])
+  const fetchInstalledPlugins = async () => {
+    try {
+      const token = localStorage.getItem('accessToken')
+      if (!token) return
+
+      const response = await fetch('/api/plugins/installed/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data: { plugins: Plugin[] } = await response.json()
+        setInstalledPlugins(data.plugins || [])
+      }
+    } catch (error) {
+      console.error('Error fetching installed plugins:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchPlugins()
+    fetchInstalledPlugins()
+  }, [])
+
+  useEffect(() => {
+    setMyPlugins(installedPlugins)
+  }, [installedPlugins])
 
   const getCategoryBadge = (category: string) => {
     const variants = {
@@ -160,7 +158,7 @@ export function Marketplace() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-total-downloads">
-              {plugins.reduce((acc, plugin) => acc + plugin.downloads, 0).toLocaleString()}
+              {plugins.reduce((acc, plugin) => acc + plugin.downloadCount, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">+23% this month</p>
           </CardContent>
@@ -220,9 +218,9 @@ export function Marketplace() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
                           <CardTitle className="text-base">{plugin.name}</CardTitle>
-                          <p className="text-sm text-muted-foreground">by {plugin.developer}</p>
+                          <p className="text-sm text-muted-foreground">v{plugin.version}</p>
                         </div>
-                        {plugin.featured && (
+                        {plugin.rating >= 4.5 && (
                           <Badge variant="secondary">Featured</Badge>
                         )}
                       </div>
@@ -239,13 +237,13 @@ export function Marketplace() {
                         </div>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{plugin.downloads.toLocaleString()} downloads</span>
+                        <span>{plugin.downloadCount.toLocaleString()} downloads</span>
                       </div>
                       <Button 
                         className="w-full" 
                         data-testid={`button-install-${plugin.id}`}
                       >
-                        {plugin.price === "Free" ? "Install" : "Purchase"}
+                        {plugin.price === 0 ? "Install" : "Purchase"}
                       </Button>
                     </CardContent>
                   </Card>
@@ -274,13 +272,13 @@ export function Marketplace() {
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <span>v{plugin.version}</span>
                           <span>•</span>
-                          <span>Updated {plugin.lastUpdate}</span>
+                          <span>Updated {new Date(plugin.updatedAt).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={getStatusBadge(plugin.status)}>
-                        {plugin.status}
+                      <Badge variant={plugin.isActive ? "default" : "secondary"}>
+                        {plugin.isActive ? "active" : "inactive"}
                       </Badge>
                       <Button variant="outline" size="sm" data-testid={`button-configure-${plugin.id}`}>
                         Configure
