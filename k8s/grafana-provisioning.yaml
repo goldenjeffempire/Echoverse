@@ -1,0 +1,225 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-echoverse
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  echoverse-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Echoverse Platform Dashboard",
+        "tags": ["echoverse", "platform", "monitoring"],
+        "timezone": "browser",
+        "refresh": "30s",
+        "panels": [
+          {
+            "id": 1,
+            "title": "HTTP Request Rate",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{app=\"echoverse-platform\"}[5m])",
+                "legendFormat": "{{method}} {{path}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 2,
+            "title": "HTTP Request Duration (95th percentile)",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{app=\"echoverse-platform\"}[5m]))",
+                "legendFormat": "{{method}} {{path}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8}
+          },
+          {
+            "id": 3,
+            "title": "Active WebSocket Connections",
+            "targets": [
+              {
+                "expr": "websocket_connections_active{app=\"echoverse-platform\"}",
+                "legendFormat": "Active Connections"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 8, "w": 8, "h": 8}
+          },
+          {
+            "id": 4,
+            "title": "Database Query Duration (95th percentile)",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(db_query_duration_seconds_bucket{app=\"echoverse-platform\"}[5m]))",
+                "legendFormat": "{{operation}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 8, "y": 8, "w": 8, "h": 8}
+          },
+          {
+            "id": 5,
+            "title": "Error Rate (5xx responses)",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{app=\"echoverse-platform\",status=~\"5..\"}[5m])",
+                "legendFormat": "{{status}} {{path}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 16, "y": 8, "w": 8, "h": 8}
+          },
+          {
+            "id": 6,
+            "title": "AI Request Cost (per hour)",
+            "targets": [
+              {
+                "expr": "rate(ai_cost_total{app=\"echoverse-platform\"}[1h])",
+                "legendFormat": "{{provider}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8}
+          },
+          {
+            "id": 7,
+            "title": "Pod CPU Usage",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\"echoverse-platform.*\"}[5m]) * 100",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8}
+          },
+          {
+            "id": 8,
+            "title": "Pod Memory Usage",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{pod=~\"echoverse-platform.*\"} / 1024 / 1024 / 1024",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8}
+          }
+        ]
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus-server:9090
+      isDefault: true
+      editable: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secrets
+              key: admin-password
+        - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+          value: /var/lib/grafana/dashboards/echoverse-dashboard.json
+        volumeMounts:
+        - name: grafana-dashboard
+          mountPath: /var/lib/grafana/dashboards
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: grafana-dashboard
+        configMap:
+          name: grafana-dashboard-echoverse
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-dashboard-provider
+        configMap:
+          name: grafana-dashboard-provider
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: 'echoverse'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: grafana

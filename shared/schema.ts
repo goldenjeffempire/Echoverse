@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import { pgTable, text, varchar, timestamp, integer, decimal, boolean, jsonb, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -18,8 +18,9 @@ export const users = pgTable("users", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   isEmailVerified: boolean("is_email_verified").default(false),
   twoFactorEnabled: boolean("two_factor_enabled").default(false),
-  twoFactorSecret: text("two_factor_secret"),
-  twoFactorBackupCodes: text("two_factor_backup_codes"),
+  twoFactorSecret: text("two_factor_secret"), // Encrypted with TWO_FACTOR_BACKUP_ENCRYPTION_KEY
+  twoFactorBackupCodes: text("two_factor_backup_codes"), // MEDIUM FIX #9: Encrypted hashes, not plaintext
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -27,6 +28,8 @@ export const users = pgTable("users", {
   roleIdx: index("users_role_idx").on(table.role),
   subscriptionTierIdx: index("users_subscription_tier_idx").on(table.subscriptionTier),
   stripeCustomerIdx: index("users_stripe_customer_idx").on(table.stripeCustomerId),
+  deletedAtIdx: index("users_deleted_at_idx").on(table.deletedAt),
+  emailDeletedAtIdx: index("users_email_deleted_at_idx").on(table.email, table.deletedAt),
   roleCheck: sql`CHECK (role IN ('user', 'admin', 'moderator'))`,
   subscriptionTierCheck: sql`CHECK (subscription_tier IN ('free', 'basic', 'pro', 'enterprise'))`,
 }));
@@ -40,6 +43,7 @@ export const sessions = pgTable("sessions", {
   userAgent: text("user_agent"),
   deviceType: text("device_type"), // mobile, desktop, tablet
   deviceFingerprint: text("device_fingerprint"), // Unique device identifier
+  tlsFingerprint: text("tls_fingerprint"), // PHASE 4: TLS fingerprint for enhanced security
   lastActivityAt: timestamp("last_activity_at").defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -49,7 +53,8 @@ export const sessions = pgTable("sessions", {
   expiresAtIdx: index("sessions_expires_at_idx").on(table.expiresAt),
   ipAddressIdx: index("sessions_ip_address_idx").on(table.ipAddress),
   lastActivityIdx: index("sessions_last_activity_idx").on(table.lastActivityAt),
-  userDeviceUniqueIdx: index("sessions_user_device_idx").on(table.userId, table.deviceFingerprint).where(sql`${table.deviceFingerprint} IS NOT NULL`),
+  userDeviceIdx: index("sessions_user_device_idx").on(table.userId, table.deviceFingerprint),
+  userExpiresAtIdx: index("sessions_user_expires_at_idx").on(table.userId, table.expiresAt),
 }));
 
 // Password Reset Tokens
@@ -113,6 +118,27 @@ export const passwordHistory = pgTable("password_history", {
   userIdCreatedAtIdx: index("password_history_user_created_idx").on(table.userId, table.createdAt),
 }));
 
+// PHASE 4: Security Events Audit Table
+export const securityEvents = pgTable("security_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  sessionId: varchar("session_id").references(() => sessions.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(), // login_failed, session_hijack_attempt, password_change, etc.
+  severity: text("severity").notNull(), // low, medium, high, critical
+  description: text("description"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  metadata: jsonb("metadata"), // Additional context
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("security_events_user_id_idx").on(table.userId),
+  eventTypeIdx: index("security_events_event_type_idx").on(table.eventType),
+  severityIdx: index("security_events_severity_idx").on(table.severity),
+  createdAtIdx: index("security_events_created_at_idx").on(table.createdAt),
+  userEventIdx: index("security_events_user_event_idx").on(table.userId, table.eventType),
+  severityCheck: sql`CHECK (severity IN ('low', 'medium', 'high', 'critical'))`,
+}));
+
 // Email Verification Tokens
 export const emailVerificationTokens = pgTable("email_verification_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -128,6 +154,23 @@ export const emailVerificationTokens = pgTable("email_verification_tokens", {
   userIdIdx: index("email_verification_tokens_user_id_idx").on(table.userId),
   tokenIdx: index("email_verification_tokens_token_idx").on(table.token),
   expiresAtIdx: index("email_verification_tokens_expires_at_idx").on(table.expiresAt),
+}));
+
+// PHASE 3: Magic Link Tokens for passwordless authentication
+export const magicLinkTokens = pgTable("magic_link_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  email: text("email").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  used: boolean("used").default(false),
+  usedAt: timestamp("used_at"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("magic_link_tokens_user_id_idx").on(table.userId),
+  tokenIdx: index("magic_link_tokens_token_idx").on(table.token),
+  expiresAtIdx: index("magic_link_tokens_expires_at_idx").on(table.expiresAt),
 }));
 
 // OAuth Providers - For social login
@@ -224,9 +267,41 @@ export const products = pgTable("products", {
   weightUnitCheck: sql`CHECK (weight_unit IN ('kg', 'lb', 'oz', 'g'))`,
 }));
 
+// MISSING FEATURE FIX: Product Variants for size, color, material options
+export const productVariants = pgTable("product_variants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  sku: text("sku").unique().notNull(),
+  name: text("name").notNull(), // e.g., "Large / Red"
+  options: jsonb("options").notNull(), // { size: "Large", color: "Red" }
+  price: decimal("price", { precision: 10, scale: 2 }), // Override product price if set
+  compareAtPrice: decimal("compare_at_price", { precision: 10, scale: 2 }),
+  costPerItem: decimal("cost_per_item", { precision: 10, scale: 2 }),
+  inventory: integer("inventory").default(0).notNull(),
+  lowStockThreshold: integer("low_stock_threshold").default(10),
+  weight: decimal("weight", { precision: 10, scale: 2 }),
+  weightUnit: text("weight_unit").default("kg"),
+  image: text("image"), // Variant-specific image
+  barcode: text("barcode"),
+  position: integer("position").default(0), // Display order
+  isActive: boolean("is_active").default(true),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  productIdIdx: index("product_variants_product_id_idx").on(table.productId),
+  skuIdx: index("product_variants_sku_idx").on(table.sku),
+  isActiveIdx: index("product_variants_is_active_idx").on(table.isActive),
+  priceCheck: sql`CHECK (price IS NULL OR price >= 0)`,
+  compareAtPriceCheck: sql`CHECK (compare_at_price IS NULL OR compare_at_price >= 0)`,
+  inventoryCheck: sql`CHECK (inventory >= 0)`,
+}));
+
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  websiteId: varchar("website_id").references(() => websites.id, { onDelete: "set null" }),
+  orderNumber: text("order_number").unique(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
   status: text("status").default("pending"), // pending, processing, paid, shipped, delivered, cancelled, refunded
@@ -237,7 +312,9 @@ export const orders = pgTable("orders", {
   shippingTotal: decimal("shipping_total", { precision: 10, scale: 2 }).default("0"),
   discountTotal: decimal("discount_total", { precision: 10, scale: 2 }).default("0"),
   total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   currency: text("currency").default("usd").notNull(),
+  paymentMethod: text("payment_method"),
   stripePaymentIntentId: text("stripe_payment_intent_id").unique(),
   idempotencyKey: text("idempotency_key").unique(), // Prevent duplicate orders
   shippingAddress: jsonb("shipping_address"),
@@ -374,6 +451,7 @@ export const posts = pgTable("posts", {
   statusIdx: index("posts_status_idx").on(table.status),
   typeIdx: index("posts_type_idx").on(table.type),
   publishedAtIdx: index("posts_published_at_idx").on(table.publishedAt),
+  createdAtIdx: index("posts_created_at_idx").on(table.createdAt),
   deletedAtIdx: index("posts_deleted_at_idx").on(table.deletedAt),
   statusCheck: sql`CHECK (status IN ('draft', 'published', 'archived'))`,
   typeCheck: sql`CHECK (type IN ('post', 'page', 'product'))`,
@@ -387,7 +465,8 @@ export const comments = pgTable("comments", {
   authorEmail: text("author_email"),
   content: text("content").notNull(),
   status: text("status").default("pending"), // pending, approved, rejected
-  parentId: varchar("parent_id"),
+  parentId: varchar("parent_id").references(() => comments.id, { onDelete: "cascade" }), // Self-referential FK for nested comments
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   postIdIdx: index("comments_post_id_idx").on(table.postId),
@@ -396,6 +475,7 @@ export const comments = pgTable("comments", {
   parentIdIdx: index("comments_parent_id_idx").on(table.parentId),
   postStatusIdx: index("comments_post_status_idx").on(table.postId, table.status),
   createdAtIdx: index("comments_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("comments_deleted_at_idx").on(table.deletedAt),
   statusCheck: sql`CHECK (status IN ('pending', 'approved', 'rejected'))`,
 }));
 
@@ -411,6 +491,7 @@ export const communities = pgTable("communities", {
   isPrivate: boolean("is_private").default(false),
   memberCount: integer("member_count").default(0),
   settings: jsonb("settings"),
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -418,6 +499,7 @@ export const communities = pgTable("communities", {
   slugIdx: index("communities_slug_idx").on(table.slug),
   isPrivateIdx: index("communities_is_private_idx").on(table.isPrivate),
   createdAtIdx: index("communities_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("communities_deleted_at_idx").on(table.deletedAt),
 }));
 
 export const communityMembers = pgTable("community_members", {
@@ -435,6 +517,7 @@ export const communityMembers = pgTable("community_members", {
 
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roomId: varchar("room_id"), // Generic room identifier for various chat contexts
   senderId: varchar("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   receiverId: varchar("receiver_id").references(() => users.id, { onDelete: "cascade" }),
   communityId: varchar("community_id").references(() => communities.id, { onDelete: "cascade" }),
@@ -442,14 +525,17 @@ export const messages = pgTable("messages", {
   type: text("type").default("text"), // text, image, file
   metadata: jsonb("metadata"),
   isRead: boolean("is_read").default(false),
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   senderIdIdx: index("messages_sender_id_idx").on(table.senderId),
   receiverIdIdx: index("messages_receiver_id_idx").on(table.receiverId),
   communityIdIdx: index("messages_community_id_idx").on(table.communityId),
+  roomIdIdx: index("messages_room_id_idx").on(table.roomId),
   isReadIdx: index("messages_is_read_idx").on(table.isRead),
   receiverUnreadIdx: index("messages_receiver_unread_idx").on(table.receiverId, table.isRead),
   createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("messages_deleted_at_idx").on(table.deletedAt),
 }));
 
 // Marketing Automation
@@ -463,6 +549,7 @@ export const campaigns = pgTable("campaigns", {
   targeting: jsonb("targeting"), // Audience criteria
   schedule: jsonb("schedule"), // Timing configuration
   metrics: jsonb("metrics"), // Performance data
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -471,6 +558,7 @@ export const campaigns = pgTable("campaigns", {
   statusIdx: index("campaigns_status_idx").on(table.status),
   userStatusIdx: index("campaigns_user_status_idx").on(table.userId, table.status),
   createdAtIdx: index("campaigns_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("campaigns_deleted_at_idx").on(table.deletedAt),
 }));
 
 export const leads = pgTable("leads", {
@@ -484,6 +572,7 @@ export const leads = pgTable("leads", {
   status: text("status").default("new"), // new, contacted, qualified, converted
   tags: jsonb("tags"),
   customFields: jsonb("custom_fields"),
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -493,6 +582,7 @@ export const leads = pgTable("leads", {
   sourceIdx: index("leads_source_idx").on(table.source),
   userStatusIdx: index("leads_user_status_idx").on(table.userId, table.status),
   createdAtIdx: index("leads_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("leads_deleted_at_idx").on(table.deletedAt),
 }));
 
 // Plugin Marketplace
@@ -511,6 +601,7 @@ export const plugins = pgTable("plugins", {
   downloadCount: integer("download_count").default(0),
   rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
   ratingCount: integer("rating_count").default(0),
+  deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -519,6 +610,7 @@ export const plugins = pgTable("plugins", {
   isActiveIdx: index("plugins_is_active_idx").on(table.isActive),
   ratingIdx: index("plugins_rating_idx").on(table.rating),
   createdAtIdx: index("plugins_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("plugins_deleted_at_idx").on(table.deletedAt),
 }));
 
 export const pluginInstallations = pgTable("plugin_installations", {
@@ -546,6 +638,9 @@ export const auditLogs = pgTable("audit_logs", {
   details: jsonb("details"),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  success: boolean("success").default(true),
+  errorMessage: text("error_message"),
+  timestamp: timestamp("timestamp").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userIdIdx: index("audit_logs_user_id_idx").on(table.userId),
@@ -574,6 +669,7 @@ export const notifications = pgTable("notifications", {
 }));
 
 // Media Library
+// CRITICAL FIX #14: Added encryption metadata for files encrypted at rest
 export const media = pgTable("media", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -585,6 +681,9 @@ export const media = pgTable("media", {
   alt: text("alt"),
   caption: text("caption"),
   metadata: jsonb("metadata"),
+  encryptionIv: text("encryption_iv"), // IV for AES-256-GCM encryption
+  encryptionAuthTag: text("encryption_auth_tag"), // Auth tag for AES-256-GCM
+  isEncrypted: boolean("is_encrypted").default(false), // Flag to indicate if file is encrypted
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userIdIdx: index("media_user_id_idx").on(table.userId),
@@ -800,6 +899,155 @@ export const paymentIntents = pgTable("payment_intents", {
   statusIdx: index("payment_intents_status_idx").on(table.status),
   idempotencyKeyIdx: index("payment_intents_idempotency_idx").on(table.idempotencyKey),
   createdAtIdx: index("payment_intents_created_at_idx").on(table.createdAt),
+}));
+
+// AI Cost Tracking - Track AI usage and costs for billing and monitoring
+export const aiCostTracking = pgTable("ai_cost_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  provider: text("provider").notNull(), // openai, local, anthropic, etc
+  model: text("model").notNull(), // gpt-4o, llama, etc
+  feature: text("feature").notNull(), // website_generation, blog_post, chatbot, etc
+  promptTokens: integer("prompt_tokens").notNull(),
+  completionTokens: integer("completion_tokens").notNull(),
+  totalTokens: integer("total_tokens").notNull(),
+  estimatedCost: decimal("estimated_cost", { precision: 10, scale: 6 }).notNull(), // Cost in USD
+  requestDurationMs: integer("request_duration_ms"),
+  success: boolean("success").default(true),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata"), // Additional context (prompt type, version, etc)
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("ai_cost_user_id_idx").on(table.userId),
+  providerIdx: index("ai_cost_provider_idx").on(table.provider),
+  featureIdx: index("ai_cost_feature_idx").on(table.feature),
+  createdAtIdx: index("ai_cost_created_at_idx").on(table.createdAt),
+  userFeatureIdx: index("ai_cost_user_feature_idx").on(table.userId, table.feature),
+  costIdx: index("ai_cost_cost_idx").on(table.estimatedCost),
+}));
+
+// AI Rate Limiting - Database-backed rate limiting for distributed deployments
+export const aiRateLimits = pgTable("ai_rate_limits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  windowStart: timestamp("window_start").notNull(),
+  requestCount: integer("request_count").notNull().default(1),
+  lastRequestAt: timestamp("last_request_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userWindowIdx: index("ai_rate_limits_user_window_idx").on(table.userId, table.windowStart),
+  windowStartIdx: index("ai_rate_limits_window_start_idx").on(table.windowStart),
+  lastRequestIdx: index("ai_rate_limits_last_request_idx").on(table.lastRequestAt),
+}));
+
+// MISSING FEATURE FIX: AI Provider Failover State Persistence
+// Tracks AI provider health, failures, and failover decisions for distributed deployments
+export const aiProviderFailover = pgTable("ai_provider_failover", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  provider: text("provider").notNull(), // 'openai', 'local', 'anthropic', etc.
+  state: text("state").notNull().default("CLOSED"), // CLOSED, OPEN, HALF_OPEN (circuit breaker states)
+  failureCount: integer("failure_count").notNull().default(0),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  lastFailureAt: timestamp("last_failure_at"),
+  lastSuccessAt: timestamp("last_success_at"),
+  lastHealthCheckAt: timestamp("last_health_check_at"),
+  isAvailable: boolean("is_available").default(true),
+  latencyMs: integer("latency_ms"), // Last measured latency
+  errorMessage: text("error_message"), // Last error
+  cooldownUntil: timestamp("cooldown_until"), // When circuit breaker cooldown expires
+  metadata: jsonb("metadata"), // Additional provider-specific data
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  providerIdx: index("ai_failover_provider_idx").on(table.provider),
+  stateIdx: index("ai_failover_state_idx").on(table.state),
+  isAvailableIdx: index("ai_failover_available_idx").on(table.isAvailable),
+  lastHealthCheckIdx: index("ai_failover_health_check_idx").on(table.lastHealthCheckAt),
+  providerUnique: index("ai_failover_provider_unique").on(table.provider), // One row per provider
+}));
+
+// Webhook Retry Queue - Track webhook delivery attempts with exponential backoff
+export const webhookRetries = pgTable("webhook_retries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  webhookEventId: varchar("webhook_event_id").notNull().references(() => webhookEvents.id, { onDelete: "cascade" }),
+  attempt: integer("attempt").notNull().default(1),
+  maxAttempts: integer("max_attempts").notNull().default(5),
+  nextRetryAt: timestamp("next_retry_at").notNull(),
+  lastError: text("last_error"),
+  lastStatusCode: integer("last_status_code"),
+  lastAttemptAt: timestamp("last_attempt_at"),
+  status: text("status").notNull().default("pending"), // pending, in_progress, succeeded, failed, abandoned
+  backoffSeconds: integer("backoff_seconds").notNull().default(60), // Current backoff delay
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  webhookEventIdIdx: index("webhook_retries_event_id_idx").on(table.webhookEventId),
+  statusIdx: index("webhook_retries_status_idx").on(table.status),
+  nextRetryAtIdx: index("webhook_retries_next_retry_idx").on(table.nextRetryAt),
+  createdAtIdx: index("webhook_retries_created_at_idx").on(table.createdAt),
+}));
+
+// Drizzle Relations for Eager Loading (fixes N+1 query issues)
+export const usersRelations = relations(users, ({ many }) => ({
+  sessions: many(sessions),
+  websites: many(websites),
+  orders: many(orders),
+  products: many(products),
+  posts: many(posts),
+  communities: many(communities),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const websitesRelations = relations(websites, ({ one }) => ({
+  user: one(users, {
+    fields: [websites.userId],
+    references: [users.id],
+  }),
+}));
+
+export const ordersRelations = relations(orders, ({ one }) => ({
+  user: one(users, {
+    fields: [orders.userId],
+    references: [users.id],
+  }),
+}));
+
+export const productsRelations = relations(products, ({ one, many }) => ({
+  user: one(users, {
+    fields: [products.userId],
+    references: [users.id],
+  }),
+  variants: many(productVariants),
+}));
+
+export const productVariantsRelations = relations(productVariants, ({ one }) => ({
+  product: one(products, {
+    fields: [productVariants.productId],
+    references: [products.id],
+  }),
+}));
+
+export const postsRelations = relations(posts, ({ one, many }) => ({
+  user: one(users, {
+    fields: [posts.userId],
+    references: [users.id],
+  }),
+  comments: many(comments),
+}));
+
+export const communitiesRelations = relations(communities, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [communities.ownerId],
+    references: [users.id],
+  }),
+  members: many(communityMembers),
 }));
 
 // Export schemas

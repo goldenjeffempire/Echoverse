@@ -1,0 +1,185 @@
+{
+  "appName": "EchoVerse",
+  "packageName": "com.echoverse.app",
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  
+  "playStoreMetadata": {
+    "title": "EchoVerse - AI Website Builder",
+    "shortDescription": "Build stunning websites with AI. E-commerce, CMS, marketing automation - all in one powerful platform.",
+    "fullDescription": "EchoVerse is the most powerful AI-powered platform for building websites, e-commerce stores, and managing your entire digital presence. Create stunning websites in minutes with AI, manage products, engage customers, and grow your business—all in one place.\n\n🤖 AI WEBSITE BUILDER\n• Generate complete websites with AI in seconds\n• Professional templates for every industry\n• Drag-and-drop page builder\n• Mobile-responsive designs\n• SEO optimization built-in\n\n🛍️ E-COMMERCE PLATFORM\n• Complete online store solution\n• Product management & inventory tracking\n• Secure payment processing via Stripe\n• Order management & fulfillment\n• Discount codes & promotional tools\n• Real-time inventory sync\n\n📱 SOCIAL & COMMUNITY\n• Built-in social network features\n• User profiles & connections\n• Content sharing & engagement\n• Direct messaging system\n• Activity feeds & notifications\n\n📊 BUSINESS MANAGEMENT\n• Complete CRM solution\n• Customer management tools\n• Email marketing automation\n• Advanced analytics & insights\n• Team collaboration features\n• Multi-user access controls\n\n💎 MARKETING SUITE\n• Email campaign builder\n• Push notification system\n• Social media integration\n• Advanced SEO tools\n• Landing page creator\n• A/B testing capabilities\n\n🔒 ENTERPRISE SECURITY\n• Bank-level encryption\n• Two-factor authentication\n• Role-based access control\n• SOC 2 Type II compliance\n• GDPR compliant\n• Regular security audits\n\nPERFECT FOR:\n✓ Entrepreneurs & startups\n✓ Small to medium businesses\n✓ E-commerce sellers\n✓ Content creators\n✓ Digital marketers\n✓ Web design agencies\n✓ Freelancers\n\nWHY CHOOSE ECHOVERSE?\n\n🚀 All-in-One Solution\nNo need for multiple expensive tools. Everything you need in one platform.\n\n🤖 AI-Powered\nBuild websites 10x faster with cutting-edge AI assistance.\n\n📱 Mobile-First\nManage your entire business from your Android device.\n\n📈 Scalable\nGrows with your business from startup to enterprise.\n\n💰 Affordable\nFraction of the cost compared to competitors.\n\n🎯 Easy to Use\nNo coding required. Intuitive interface for everyone.\n\n🌍 Global Ready\nMulti-language support and international payment processing.\n\n⚡ Lightning Fast\nOptimized for speed and performance.\n\nPRICING PLANS:\n\n🆓 FREE\n• 1 website\n• Basic templates\n• 100 products\n• Community support\n\n💼 PRO - $29/month\n• Unlimited websites\n• Premium templates\n• Unlimited products\n• Advanced analytics\n• Priority support\n• Remove EchoVerse branding\n\n🏢 BUSINESS - $99/month\n• Everything in Pro\n• Team collaboration (5 users)\n• Advanced automations\n• API access\n• Custom domain SSL\n• White label options\n\n🏆 ENTERPRISE - Custom\n• Unlimited team members\n• Dedicated account manager\n• Custom integrations\n• SLA guarantee\n• On-premise deployment option\n\nFEATURES HIGHLIGHTS:\n\n✨ Drag & Drop Editor - Build visually without code\n🎨 1000+ Templates - Professional designs for any industry\n🔄 Auto-Save - Never lose your work\n📸 Image Optimization - Automatic WebP conversion\n🔍 SEO Tools - Rank higher on Google\n📧 Email Builder - Create stunning newsletters\n📊 Analytics Dashboard - Track every metric\n💳 Payment Gateway - Accept payments globally\n🎁 Coupon System - Create promotions easily\n📦 Inventory Management - Track stock levels\n🚚 Shipping Integration - Connect with carriers\n📱 PWA Support - Install as native app\n🔔 Push Notifications - Engage users effectively\n🌐 Multi-language - Reach global audience\n♿ Accessibility - WCAG 2.1 AA compliant\n\nTRUSTED BY 50,000+ BUSINESSES\n\n\"EchoVerse transformed how we build websites. What used to take weeks now takes hours!\" - Sarah M., Digital Agency Owner\n\n\"The AI features are incredible. I created a complete e-commerce store in one afternoon.\" - John D., Online Store Owner\n\n\"Best investment for our business. The ROI has been amazing.\" - Lisa K., Marketing Manager\n\nGET STARTED TODAY!\n\n1. Download the app\n2. Sign up for free\n3. Choose a template or start from scratch\n4. Let AI help you build\n5. Launch your website!\n\nNo credit card required for free plan.\n\nSUPPORT & RESOURCES:\n• 24/7 customer support\n• Video tutorials\n• Knowledge base\n• Community forum\n• Live chat assistance\n• Email support\n\nJoin thousands of successful businesses using EchoVerse to build and grow their online presence.\n\nDownload now and start building your dream website today!",
+    
+    "category": {
+      "primary": "BUSINESS",
+      "secondary": "PRODUCTIVITY"
+    },
+    
+    "contentRating": "Everyone",
+    "targetAge": "18+",
+    
+    "tags": [
+      "website builder",
+      "ai website",
+      "ecommerce",
+      "online store",
+      "cms",
+      "marketing",
+      "business",
+      "seo",
+      "landing page",
+      "web design"
+    ],
+    
+    "contactDetails": {
+      "email": "support@echoverse.com",
+      "phone": "+1-555-ECHO-VERSE",
+      "website": "https://echoverse.com",
+      "privacyPolicy": "https://echoverse.com/privacy",
+      "termsOfService": "https://echoverse.com/terms"
+    },
+    
+    "graphicAssets": {
+      "icon": {
+        "sizes": {
+          "48x48": "ic_launcher_48.png",
+          "72x72": "ic_launcher_72.png",
+          "96x96": "ic_launcher_96.png",
+          "144x144": "ic_launcher_144.png",
+          "192x192": "ic_launcher_192.png",
+          "512x512": "ic_launcher_512.png"
+        }
+      },
+      "featureGraphic": {
+        "size": "1024x500",
+        "file": "feature_graphic.png",
+        "description": "EchoVerse - AI-Powered Website Builder"
+      },
+      "promoGraphic": {
+        "size": "180x120",
+        "file": "promo_graphic.png"
+      },
+      "screenshots": {
+        "phone": {
+          "required": 4,
+          "max": 8,
+          "size": "1080x1920 or 1440x2560",
+          "descriptions": [
+            "AI Website Builder - Create stunning sites in seconds",
+            "E-Commerce Dashboard - Complete store management",
+            "Analytics & Insights - Track your growth",
+            "Drag & Drop Editor - Design without coding",
+            "Product Management - Inventory at your fingertips",
+            "Marketing Automation - Grow your business",
+            "Mobile Responsive - Perfect on any device",
+            "Team Collaboration - Work together seamlessly"
+          ]
+        },
+        "tablet7": {
+          "required": 1,
+          "size": "1920x1200"
+        },
+        "tablet10": {
+          "required": 1,
+          "size": "2560x1600"
+        }
+      },
+      "video": {
+        "youtubeUrl": "https://youtube.com/watch?v=ECHOVERSE_DEMO",
+        "description": "See EchoVerse in action - Build a complete website in 5 minutes"
+      }
+    },
+    
+    "testingNotes": "Thank you for reviewing EchoVerse!\n\nTest Credentials:\nEmail: reviewer@echoverse.com\nPassword: GooglePlay2025!\n\nTest Payment Card:\nCard: 4242 4242 4242 4242\nExpiry: 12/25\nCVV: 123\n\nKey Testing Areas:\n1. Sign up and onboarding flow\n2. AI website generation\n3. Drag-and-drop page builder\n4. Product creation and management\n5. Payment processing (test mode)\n6. Push notifications\n7. Offline functionality\n8. Team collaboration\n\nAll payment processing uses Stripe test mode.\nPush notifications require device with Google Play Services.\n\nFor questions: playstore@echoverse.com",
+    
+    "dataCollection": {
+      "collectedData": [
+        {
+          "type": "Personal Info",
+          "items": ["Name", "Email", "Phone (optional)"],
+          "purpose": "Account creation and communication"
+        },
+        {
+          "type": "Financial Info",
+          "items": ["Payment information"],
+          "purpose": "Processing payments (via Stripe)"
+        },
+        {
+          "type": "App Activity",
+          "items": ["Website edits", "Page views"],
+          "purpose": "Provide service and analytics"
+        },
+        {
+          "type": "Device Info",
+          "items": ["Device ID", "OS version"],
+          "purpose": "App functionality and crash reporting"
+        }
+      ],
+      "dataSharing": {
+        "shared": true,
+        "partners": [
+          "Stripe (payment processing)",
+          "SendGrid (email delivery)",
+          "Sentry (error tracking)"
+        ]
+      },
+      "dataEncryption": {
+        "inTransit": true,
+        "atRest": true
+      },
+      "dataDeletion": {
+        "userCanRequest": true,
+        "process": "Settings > Privacy > Delete Account"
+      }
+    }
+  },
+  
+  "configuration": {
+    "signing": {
+      "keystore": "release.keystore",
+      "keyAlias": "echoverse-release",
+      "keyPassword": "REPLACE_WITH_KEY_PASSWORD",
+      "storePassword": "REPLACE_WITH_STORE_PASSWORD"
+    },
+    "buildTypes": {
+      "release": {
+        "minifyEnabled": true,
+        "shrinkResources": true,
+        "proguardFiles": [
+          "proguard-android-optimize.txt",
+          "proguard-rules.pro"
+        ]
+      }
+    },
+    "permissions": [
+      "INTERNET",
+      "ACCESS_NETWORK_STATE",
+      "CAMERA",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE",
+      "VIBRATE",
+      "RECEIVE_BOOT_COMPLETED",
+      "POST_NOTIFICATIONS"
+    ]
+  },
+  
+  "releaseManagement": {
+    "tracks": {
+      "internal": {
+        "description": "Internal testing track",
+        "users": "team@echoverse.com"
+      },
+      "alpha": {
+        "description": "Alpha testing",
+        "userLimit": 100
+      },
+      "beta": {
+        "description": "Public beta",
+        "userLimit": 10000
+      },
+      "production": {
+        "description": "Production release",
+        "rollout": "Staged (10%, 25%, 50%, 100%)"
+      }
+    }
+  }
+}

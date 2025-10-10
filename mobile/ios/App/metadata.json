@@ -1,0 +1,114 @@
+{
+  "appName": "EchoVerse",
+  "appId": "com.echoverse.app",
+  "version": "1.0.0",
+  "buildNumber": "1",
+  
+  "appStoreMetadata": {
+    "name": "EchoVerse - AI Website Builder",
+    "subtitle": "Build, Launch, Grow Your Business",
+    "description": "EchoVerse is the most powerful AI-powered platform for building websites, e-commerce stores, and managing your entire digital presence. Create stunning websites in minutes with AI, manage products, engage customers, and grow your business—all in one place.\n\nKEY FEATURES:\n\n🤖 AI Website Builder\n• Generate complete websites with AI in seconds\n• Professional templates for every industry\n• Drag-and-drop page builder\n• Mobile-responsive designs\n• SEO optimization built-in\n\n🛍️ E-Commerce Platform\n• Complete online store solution\n• Product management & inventory\n• Secure payment processing (Stripe)\n• Order management & fulfillment\n• Discount codes & promotions\n\n📱 Social & Community\n• Built-in social network features\n• User profiles & connections\n• Content sharing & engagement\n• Direct messaging\n• Activity feeds\n\n📊 Business Management\n• CRM & customer management\n• Email marketing automation\n• Analytics & insights\n• Team collaboration tools\n• Multi-user access controls\n\n💎 Marketing Suite\n• Email campaigns\n• Push notifications\n• Social media integration\n• SEO tools & optimization\n• Landing page builder\n\n🔒 Enterprise Features\n• Advanced security\n• Role-based access control\n• Two-factor authentication\n• Data export & backup\n• Priority support\n\nPERFECT FOR:\n• Entrepreneurs & startups\n• Small businesses\n• E-commerce sellers\n• Content creators\n• Digital marketers\n• Web designers\n• Agencies\n\nWHY ECHOVERSE?\n✓ All-in-one solution - No need for multiple tools\n✓ AI-powered - Build 10x faster with AI assistance\n✓ Mobile-first - Manage everything on the go\n✓ Scalable - Grows with your business\n✓ Affordable - Fraction of the cost of competitors\n✓ Support - 24/7 customer support\n\nPRICING:\n• Free: Get started with basic features\n• Pro: $29/month - Full features for professionals\n• Business: $99/month - Advanced tools for teams\n• Enterprise: Custom pricing for large organizations\n\nJoin thousands of businesses using EchoVerse to build and grow their online presence.\n\nDownload now and start building your dream website today!",
+    
+    "keywords": [
+      "website builder",
+      "ai website",
+      "ecommerce",
+      "online store",
+      "cms",
+      "marketing automation",
+      "business tools",
+      "seo optimization",
+      "landing page builder",
+      "digital marketing"
+    ],
+    
+    "category": {
+      "primary": "Business",
+      "secondary": "Productivity"
+    },
+    
+    "supportURL": "https://echoverse.com/support",
+    "marketingURL": "https://echoverse.com",
+    "privacyPolicyURL": "https://echoverse.com/privacy",
+    "termsOfServiceURL": "https://echoverse.com/terms",
+    
+    "screenshots": {
+      "iphone65": {
+        "required": 3,
+        "description": [
+          "AI Website Builder - Create stunning websites in seconds",
+          "E-Commerce Dashboard - Manage your online store with ease",
+          "Analytics & Insights - Track your business growth",
+          "Mobile Editor - Edit your site on the go",
+          "Product Management - Complete inventory control"
+        ]
+      },
+      "iphone55": {
+        "required": 3
+      },
+      "ipad129": {
+        "required": 3
+      }
+    },
+    
+    "appReviewNotes": "Thank you for reviewing EchoVerse!\n\nTest Account:\nEmail: reviewer@echoverse.com\nPassword: AppleReview2025!\n\nThe app requires:\n1. Internet connection for full functionality\n2. Account creation (free)\n3. Optional Stripe integration for payments\n\nKey features to test:\n• AI website generation\n• Drag-and-drop editor\n• Product management\n• Analytics dashboard\n• Push notifications\n\nAll payment features use Stripe test mode during review.\n\nPlease contact support@echoverse.com for any questions.",
+    
+    "ageRating": "4+",
+    
+    "copyrightNotice": "© 2025 EchoVerse Inc. All rights reserved."
+  },
+  
+  "configuration": {
+    "teamId": "REPLACE_WITH_APPLE_TEAM_ID",
+    "bundleId": "com.echoverse.app",
+    "provisioning": {
+      "development": "EchoVerse Development",
+      "distribution": "EchoVerse Distribution"
+    },
+    "entitlements": [
+      "com.apple.developer.associated-domains",
+      "com.apple.developer.push-notifications",
+      "com.apple.developer.in-app-payments",
+      "com.apple.security.application-groups"
+    ],
+    "capabilities": [
+      "Push Notifications",
+      "Associated Domains",
+      "In-App Purchase",
+      "Universal Links",
+      "Background Modes",
+      "Remote Notifications"
+    ]
+  },
+  
+  "assets": {
+    "appIcon": {
+      "required": true,
+      "sizes": [
+        "20x20@2x",
+        "20x20@3x",
+        "29x29@2x",
+        "29x29@3x",
+        "40x40@2x",
+        "40x40@3x",
+        "60x60@2x",
+        "60x60@3x",
+        "1024x1024"
+      ]
+    },
+    "launchScreen": {
+      "storyboard": "LaunchScreen.storyboard",
+      "backgroundColor": "#ffffff",
+      "logo": "splash-logo.png"
+    }
+  },
+  
+  "testFlight": {
+    "betaTestingNotes": "Welcome to EchoVerse beta!\n\nPlease test:\n1. Website creation flow\n2. E-commerce features\n3. Push notifications\n4. Offline functionality\n\nReport bugs to: beta@echoverse.com",
+    "betaGroups": [
+      "Internal Testers",
+      "External Beta",
+      "Early Access"
+    ]
+  }
+}

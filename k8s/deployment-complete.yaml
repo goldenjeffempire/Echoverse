@@ -1,0 +1,325 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echoverse-platform
+  namespace: echoverse
+  labels:
+    app: echoverse-platform
+    version: v1.0.0
+    component: application
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: echoverse-platform
+  template:
+    metadata:
+      labels:
+        app: echoverse-platform
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "5000"
+    spec:
+      # Pod affinity for database locality and anti-affinity to spread across nodes
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - postgres-db
+              topologyKey: kubernetes.io/hostname
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - echoverse-platform
+                topologyKey: kubernetes.io/hostname
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      
+      containers:
+        - name: app
+          image: echoverse-platform:latest
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "5000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: database-url
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: session-secret
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: jwt-secret
+            - name: TWO_FACTOR_BACKUP_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: 2fa-encryption-key
+            - name: WEBHOOK_SIGNATURE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: webhook-secret
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: openai-api-key
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: stripe-secret-key
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: echoverse-secrets
+                  key: stripe-webhook-secret
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: echoverse-config
+                  key: redis-url
+            - name: ENABLE_REDIS_CACHE
+              value: "true"
+          
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2
+              memory: 4Gi
+          
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+          
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: logs
+              mountPath: /app/logs
+          
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1001
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: echoverse-uploads-pvc
+        - name: logs
+          emptyDir: {}
+      
+      # Graceful shutdown
+      terminationGracePeriodSeconds: 60
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echoverse-platform-service
+  namespace: echoverse
+  labels:
+    app: echoverse-platform
+spec:
+  type: LoadBalancer
+  selector:
+    app: echoverse-platform
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5000
+      protocol: TCP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: echoverse-uploads-pvc
+  namespace: echoverse
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: echoverse-platform-hpa
+  namespace: echoverse
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: echoverse-platform
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Pods
+      pods:
+        metric:
+          name: http_requests_per_second
+        target:
+          type: AverageValue
+          averageValue: "1000"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: echoverse-platform-pdb
+  namespace: echoverse
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: echoverse-platform
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: echoverse-config
+  namespace: echoverse
+data:
+  redis-url: "redis://echoverse-redis:6379"
+  log-level: "info"
+  max-payload-size: "2mb"
+  enable-2fa: "true"
+  force-https: "true"
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: echoverse-ingress
+  namespace: echoverse
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "2m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  tls:
+    - hosts:
+        - echoverse.com
+        - www.echoverse.com
+      secretName: echoverse-tls
+  rules:
+    - host: echoverse.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: echoverse-platform-service
+                port:
+                  number: 80
+    - host: www.echoverse.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: echoverse-platform-service
+                port:
+                  number: 80
