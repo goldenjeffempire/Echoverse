@@ -27,7 +27,7 @@ class RouteErrorBoundaryClass extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error(`RouteErrorBoundary [${this.props.routeName || 'Unknown Route'}] caught error:`, error, errorInfo);
+    // RouteErrorBoundary caught error
     
     if (process.env.NODE_ENV === 'production') {
       this.logErrorToService(error, errorInfo);
@@ -35,11 +35,7 @@ class RouteErrorBoundaryClass extends Component<Props, State> {
   }
 
   logErrorToService(error: Error, errorInfo: ErrorInfo): void {
-    console.log('Error in route:', {
-      route: this.props.routeName,
-      error: error.toString(),
-      componentStack: errorInfo.componentStack
-    });
+    // Error in route - would be sent to error reporting service
   }
 
   handleReset = (): void => {

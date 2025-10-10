@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    // ErrorBoundary caught an error
     
     this.setState({
       error,
@@ -52,11 +52,18 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   logErrorToService(error: Error, errorInfo: ErrorInfo): void {
-    // Placeholder for error reporting service integration
-    console.log('Would send to error reporting service:', {
-      error: error.toString(),
-      componentStack: errorInfo.componentStack
-    });
+    // Send to backend error reporting endpoint
+    fetch('/api/errors/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: error.toString(),
+        errorInfo: errorInfo.componentStack,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      })
+    }).catch(err => console.error('Failed to report error:', err));
   }
 
   handleReset = (): void => {
