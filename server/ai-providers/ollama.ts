@@ -1,5 +1,6 @@
 import { AIProvider, getAIConfig } from './base';
 import { logger } from '../logger';
+import { TIME_CONSTANTS, PORTS } from '@shared/constants';
 
 export class OllamaProvider implements AIProvider {
   name = 'Ollama/LocalAI (Local)';

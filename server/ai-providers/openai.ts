@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { AIProvider } from './base';
 import { APIKeyMissingError, QuotaExceededError, AIServiceError } from '../utils/errors';
 import { logger } from '../logger';
+import { costTracker } from './cost-tracker';
 
 export class OpenAIProvider implements AIProvider {
   name = 'OpenAI (Fallback)';
@@ -52,6 +53,16 @@ export class OpenAIProvider implements AIProvider {
           completionTokens: response.usage.completion_tokens,
           totalTokens: response.usage.total_tokens
         });
+        
+        // Track AI costs
+        costTracker.track({
+          provider: 'openai',
+          model: 'gpt-4o',
+          promptTokens: response.usage.prompt_tokens,
+          completionTokens: response.usage.completion_tokens,
+          totalTokens: response.usage.total_tokens,
+          feature: 'chat_completion'
+        });
       }
 
       return content;
@@ -99,15 +110,28 @@ export class OpenAIProvider implements AIProvider {
     });
 
     let fullResponse = '';
+    let estimatedTokens = 0;
+    
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
         fullResponse += content;
+        estimatedTokens += Math.ceil(content.length / 4); // Rough estimate: 1 token ≈ 4 chars
         if (params.onToken) {
           params.onToken(content);
         }
       }
     }
+    
+    // Track streaming costs (estimated)
+    costTracker.track({
+      provider: 'openai',
+      model: 'gpt-4o',
+      promptTokens: Math.ceil((params.systemPrompt.length + params.userPrompt.length) / 4),
+      completionTokens: estimatedTokens,
+      totalTokens: Math.ceil((params.systemPrompt.length + params.userPrompt.length) / 4) + estimatedTokens,
+      feature: 'chat_completion_stream'
+    });
 
     return fullResponse;
   }

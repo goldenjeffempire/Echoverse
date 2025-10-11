@@ -2,156 +2,129 @@
  * Email Service
  * Supports multiple email providers: SMTP, SendGrid, AWS SES, Mailgun
  */
-
 import { config } from '../config';
 import { logger } from '../logger';
-
-export interface EmailOptions {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}
-
-export interface EmailService {
-  sendEmail(options: EmailOptions): Promise<void>;
-}
-
-class SMTPEmailService implements EmailService {
-  async sendEmail(options: EmailOptions): Promise<void> {
-    try {
-      // @ts-ignore - nodemailer is an optional dependency based on email provider config
-      const nodemailer = await import('nodemailer').catch(() => {
-        throw new Error('nodemailer package not installed. Run: npm install nodemailer');
-      });
-      
-      const transporter = nodemailer.createTransport({
-        host: config.smtpHost,
-        port: config.smtpPort,
-        secure: config.smtpSecure,
-        auth: config.smtpUser && config.smtpPass ? {
-          user: config.smtpUser,
-          pass: config.smtpPass,
-        } : undefined,
-      });
-      
-      await transporter.sendMail({
-        from: `${config.emailFromName} <${config.emailFrom}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text || options.html.replace(/<[^>]*>/g, ''),
-      });
-      
-      logger.info('Email sent via SMTP', { to: options.to, subject: options.subject });
-    } catch (error) {
-      logger.error('SMTP email failed', error instanceof Error ? error : undefined);
-      throw error;
+class SMTPEmailService {
+    async sendEmail(options) {
+        try {
+            // @ts-ignore - nodemailer is an optional dependency based on email provider config
+            const nodemailer = await import('nodemailer').catch(() => {
+                throw new Error('nodemailer package not installed. Run: npm install nodemailer');
+            });
+            const transporter = nodemailer.createTransport({
+                host: config.smtpHost,
+                port: config.smtpPort,
+                secure: config.smtpSecure,
+                auth: config.smtpUser && config.smtpPass ? {
+                    user: config.smtpUser,
+                    pass: config.smtpPass,
+                } : undefined,
+            });
+            await transporter.sendMail({
+                from: `${config.emailFromName} <${config.emailFrom}>`,
+                to: options.to,
+                subject: options.subject,
+                html: options.html,
+                text: options.text || options.html.replace(/<[^>]*>/g, ''),
+            });
+            logger.info('Email sent via SMTP', { to: options.to, subject: options.subject });
+        }
+        catch (error) {
+            logger.error('SMTP email failed', error instanceof Error ? error : undefined);
+            throw error;
+        }
     }
-  }
 }
-
-class SendGridEmailService implements EmailService {
-  async sendEmail(options: EmailOptions): Promise<void> {
-    if (!config.sendgridApiKey) {
-      throw new Error('SendGrid API key not configured');
+class SendGridEmailService {
+    async sendEmail(options) {
+        if (!config.sendgridApiKey) {
+            throw new Error('SendGrid API key not configured');
+        }
+        try {
+            // @ts-ignore - @sendgrid/mail is an optional dependency based on email provider config
+            const sgMail = await import('@sendgrid/mail').catch(() => {
+                throw new Error('@sendgrid/mail package not installed. Run: npm install @sendgrid/mail');
+            });
+            sgMail.default.setApiKey(config.sendgridApiKey);
+            await sgMail.default.send({
+                from: `${config.emailFromName} <${config.emailFrom}>`,
+                to: options.to,
+                subject: options.subject,
+                html: options.html,
+                text: options.text || options.html.replace(/<[^>]*>/g, ''),
+            });
+            logger.info('Email sent via SendGrid', { to: options.to, subject: options.subject });
+        }
+        catch (error) {
+            logger.error('SendGrid email failed', error instanceof Error ? error : undefined);
+            throw error;
+        }
     }
-    
-    try {
-      // @ts-ignore - @sendgrid/mail is an optional dependency based on email provider config
-      const sgMail = await import('@sendgrid/mail').catch(() => {
-        throw new Error('@sendgrid/mail package not installed. Run: npm install @sendgrid/mail');
-      });
-      sgMail.default.setApiKey(config.sendgridApiKey);
-      
-      await sgMail.default.send({
-        from: `${config.emailFromName} <${config.emailFrom}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text || options.html.replace(/<[^>]*>/g, ''),
-      });
-      
-      logger.info('Email sent via SendGrid', { to: options.to, subject: options.subject });
-    } catch (error) {
-      logger.error('SendGrid email failed', error instanceof Error ? error : undefined);
-      throw error;
+}
+class SESEmailService {
+    async sendEmail(options) {
+        if (!config.awsSesRegion || !config.awsSesAccessKeyId || !config.awsSesSecretAccessKey) {
+            throw new Error('AWS SES credentials not configured');
+        }
+        try {
+            // @ts-ignore - aws-sdk is an optional dependency based on email provider config
+            const AWS = await import('aws-sdk').catch(() => {
+                throw new Error('aws-sdk package not installed. Run: npm install aws-sdk');
+            });
+            const ses = new AWS.SES({
+                region: config.awsSesRegion,
+                accessKeyId: config.awsSesAccessKeyId,
+                secretAccessKey: config.awsSesSecretAccessKey,
+            });
+            await ses.sendEmail({
+                Source: `${config.emailFromName} <${config.emailFrom}>`,
+                Destination: { ToAddresses: [options.to] },
+                Message: {
+                    Subject: { Data: options.subject },
+                    Body: {
+                        Html: { Data: options.html },
+                        Text: { Data: options.text || options.html.replace(/<[^>]*>/g, '') },
+                    },
+                },
+            }).promise();
+            logger.info('Email sent via AWS SES', { to: options.to, subject: options.subject });
+        }
+        catch (error) {
+            logger.error('AWS SES email failed', error instanceof Error ? error : undefined);
+            throw error;
+        }
     }
-  }
 }
-
-class SESEmailService implements EmailService {
-  async sendEmail(options: EmailOptions): Promise<void> {
-    if (!config.awsSesRegion || !config.awsSesAccessKeyId || !config.awsSesSecretAccessKey) {
-      throw new Error('AWS SES credentials not configured');
+class MockEmailService {
+    async sendEmail(options) {
+        logger.info('📧 Mock Email (not actually sent)', {
+            to: options.to,
+            subject: options.subject,
+            html: options.html.substring(0, 200) + '...',
+        });
     }
-    
-    try {
-      // @ts-ignore - aws-sdk is an optional dependency based on email provider config
-      const AWS = await import('aws-sdk').catch(() => {
-        throw new Error('aws-sdk package not installed. Run: npm install aws-sdk');
-      });
-      const ses = new AWS.SES({
-        region: config.awsSesRegion,
-        accessKeyId: config.awsSesAccessKeyId,
-        secretAccessKey: config.awsSesSecretAccessKey,
-      });
-      
-      await ses.sendEmail({
-        Source: `${config.emailFromName} <${config.emailFrom}>`,
-        Destination: { ToAddresses: [options.to] },
-        Message: {
-          Subject: { Data: options.subject },
-          Body: {
-            Html: { Data: options.html },
-            Text: { Data: options.text || options.html.replace(/<[^>]*>/g, '') },
-          },
-        },
-      }).promise();
-      
-      logger.info('Email sent via AWS SES', { to: options.to, subject: options.subject });
-    } catch (error) {
-      logger.error('AWS SES email failed', error instanceof Error ? error : undefined);
-      throw error;
+}
+function createEmailService() {
+    if (config.mockEmail) {
+        return new MockEmailService();
     }
-  }
+    switch (config.emailProvider) {
+        case 'smtp':
+            return new SMTPEmailService();
+        case 'sendgrid':
+            return new SendGridEmailService();
+        case 'ses':
+            return new SESEmailService();
+        case 'mailgun':
+            throw new Error('Mailgun email service not yet implemented');
+        default:
+            throw new Error(`Unknown email provider: ${config.emailProvider}`);
+    }
 }
-
-class MockEmailService implements EmailService {
-  async sendEmail(options: EmailOptions): Promise<void> {
-    logger.info('📧 Mock Email (not actually sent)', {
-      to: options.to,
-      subject: options.subject,
-      html: options.html.substring(0, 200) + '...',
-    });
-  }
-}
-
-function createEmailService(): EmailService {
-  if (config.mockEmail) {
-    return new MockEmailService();
-  }
-  
-  switch (config.emailProvider) {
-    case 'smtp':
-      return new SMTPEmailService();
-    case 'sendgrid':
-      return new SendGridEmailService();
-    case 'ses':
-      return new SESEmailService();
-    case 'mailgun':
-      throw new Error('Mailgun email service not yet implemented');
-    default:
-      throw new Error(`Unknown email provider: ${config.emailProvider}`);
-  }
-}
-
 export const emailService = createEmailService();
-
-export async function sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
-  const resetUrl = `${config.appUrl}/reset-password?token=${resetToken}`;
-  
-  const html = `
+export async function sendPasswordResetEmail(email, resetToken) {
+    const resetUrl = `${config.appUrl}/reset-password?token=${resetToken}`;
+    const html = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -189,18 +162,15 @@ export async function sendPasswordResetEmail(email: string, resetToken: string):
       </body>
     </html>
   `;
-  
-  await emailService.sendEmail({
-    to: email,
-    subject: 'Reset Your Password - EchoVerse',
-    html,
-  });
+    await emailService.sendEmail({
+        to: email,
+        subject: 'Reset Your Password - EchoVerse',
+        html,
+    });
 }
-
-export async function sendEmailVerificationEmail(email: string, verificationToken: string): Promise<void> {
-  const verificationUrl = `${config.appUrl}/verify-email?token=${verificationToken}`;
-  
-  const html = `
+export async function sendEmailVerificationEmail(email, verificationToken) {
+    const verificationUrl = `${config.appUrl}/verify-email?token=${verificationToken}`;
+    const html = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -236,16 +206,14 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
       </body>
     </html>
   `;
-  
-  await emailService.sendEmail({
-    to: email,
-    subject: 'Verify Your Email - EchoVerse',
-    html,
-  });
+    await emailService.sendEmail({
+        to: email,
+        subject: 'Verify Your Email - EchoVerse',
+        html,
+    });
 }
-
-export async function send2FAEmail(email: string, code: string): Promise<void> {
-  const html = `
+export async function send2FAEmail(email, code) {
+    const html = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -277,20 +245,17 @@ export async function send2FAEmail(email: string, code: string): Promise<void> {
       </body>
     </html>
   `;
-  
-  await emailService.sendEmail({
-    to: email,
-    subject: 'Your 2FA Code - EchoVerse',
-    html,
-  });
+    await emailService.sendEmail({
+        to: email,
+        subject: 'Your 2FA Code - EchoVerse',
+        html,
+    });
 }
-
 // PHASE 3: Magic Link Email
-export async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
-  const appUrl = config.appUrl || 'http://localhost:5000';
-  const magicLink = `${appUrl}/auth/magic-link?token=${token}`;
-  
-  const html = `
+export async function sendMagicLinkEmail(email, token) {
+    const appUrl = config.appUrl || 'http://localhost:5000';
+    const magicLink = `${appUrl}/auth/magic-link?token=${token}`;
+    const html = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -327,10 +292,9 @@ export async function sendMagicLinkEmail(email: string, token: string): Promise<
       </body>
     </html>
   `;
-  
-  await emailService.sendEmail({
-    to: email,
-    subject: 'Your Magic Sign-in Link - EchoVerse',
-    html,
-  });
+    await emailService.sendEmail({
+        to: email,
+        subject: 'Your Magic Sign-in Link - EchoVerse',
+        html,
+    });
 }

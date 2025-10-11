@@ -4,6 +4,13 @@ import { OpenAIProvider } from './openai';
 import { AIServiceError } from '../utils/errors';
 import { logger } from '../logger';
 import { randomUUID } from 'crypto';
+import {
+  aiProviderHealth,
+  aiProviderConsecutiveFailures,
+  aiProviderLatencyMs,
+  aiProviderCircuitBreakerState
+} from '../monitoring/metrics';
+import { TIME_CONSTANTS, AI_CONFIG } from '@shared/constants';
 
 interface CircuitBreakerState {
   failures: number;
@@ -21,11 +28,18 @@ class AIProviderRouter {
   private circuitBreaker: CircuitBreakerState;
   private requestLogs: AIRequestLog[] = [];
   private maxLogSize = 100;
+  private alertSent: boolean = false;
+  private lastAlertTime: Date | null = null;
   
+  // Configurable thresholds from environment or defaults
+  private readonly CONSECUTIVE_FAILURE_THRESHOLD = parseInt(process.env.AI_PROVIDER_FAILURE_THRESHOLD ?? '5', 10);
+  private readonly COOLDOWN_PERIOD_MS = parseInt(process.env.AI_PROVIDER_COOLDOWN_MS ?? String(5 * TIME_CONSTANTS.ONE_MINUTE), 10);
+  private readonly HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.AI_PROVIDER_HEALTH_TIMEOUT_MS ?? String(3 * TIME_CONSTANTS.ONE_SECOND), 10);
   private readonly CIRCUIT_BREAKER_THRESHOLD = 5;
-  private readonly CIRCUIT_BREAKER_TIMEOUT = 60000;
-  private readonly MAX_RETRIES = 3;
-  private readonly RETRY_DELAYS = [1000, 2000, 4000];
+  private readonly CIRCUIT_BREAKER_TIMEOUT = TIME_CONSTANTS.ONE_MINUTE;
+  private readonly MAX_RETRIES = AI_CONFIG.MAX_RETRIES;
+  private readonly RETRY_DELAYS = [TIME_CONSTANTS.ONE_SECOND, 2 * TIME_CONSTANTS.ONE_SECOND, 4 * TIME_CONSTANTS.ONE_SECOND];
+  private readonly ALERT_COOLDOWN_MS = TIME_CONSTANTS.ONE_HOUR;
 
   constructor() {
     this.config = getAIConfig();
@@ -77,46 +91,166 @@ class AIProviderRouter {
   }
 
   private startHealthChecks(): void {
-    setInterval(() => this.checkProviderHealth(), 30000);
+    setInterval(() => this.checkProviderHealth(), 30 * TIME_CONSTANTS.ONE_SECOND);
     this.checkProviderHealth();
+  }
+
+  private async checkWithTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    errorMessage: string
+  ): Promise<T> {
+    let timeoutId: NodeJS.Timeout;
+    
+    const timeoutPromise = new Promise<T>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+    });
+    
+    try {
+      const result = await Promise.race([promise, timeoutPromise]);
+      clearTimeout(timeoutId!);
+      return result;
+    } catch (error) {
+      clearTimeout(timeoutId!);
+      throw error;
+    }
+  }
+
+  private shouldResetFailures(lastCheck: Date): boolean {
+    // Reset failures if cool-down period has passed
+    const timeSinceLastCheck = Date.now() - lastCheck.getTime();
+    return timeSinceLastCheck >= this.COOLDOWN_PERIOD_MS;
+  }
+
+  private async sendAlert(provider: string, consecutiveFailures: number, latestError?: string): Promise<void> {
+    // Prevent alert spam - only send once per hour
+    if (this.lastAlertTime && (Date.now() - this.lastAlertTime.getTime()) < this.ALERT_COOLDOWN_MS) {
+      return;
+    }
+
+    const alertMessage = `CRITICAL: AI Provider ${provider} has ${consecutiveFailures} consecutive failures (threshold: ${this.CONSECUTIVE_FAILURE_THRESHOLD})`;
+    
+    logger.error('AI Provider Alert', undefined, {
+      type: 'PROVIDER_FAILURE_ALERT',
+      provider,
+      consecutiveFailures,
+      threshold: this.CONSECUTIVE_FAILURE_THRESHOLD,
+      latestError: latestError || 'unknown',
+      timestamp: new Date().toISOString()
+    });
+
+    this.lastAlertTime = new Date();
+    this.alertSent = true;
   }
 
   private async checkProviderHealth(): Promise<void> {
     const startTime = Date.now();
+    let latestError: string | undefined;
+    
     try {
-      const isAvailable = await this.primaryProvider.isAvailable();
+      const isAvailable = await this.checkWithTimeout(
+        this.primaryProvider.isAvailable(),
+        this.HEALTH_CHECK_TIMEOUT_MS,
+        `Health check timeout after ${this.HEALTH_CHECK_TIMEOUT_MS}ms`
+      );
       const latency = Date.now() - startTime;
+      
+      // Reset failures on success OR after cool-down period
+      const shouldReset = isAvailable || this.shouldResetFailures(this.primaryHealth.lastCheck);
+      const newFailures = isAvailable ? 0 : 
+        shouldReset ? 1 : // Reset and count this failure
+        Math.min(this.primaryHealth.consecutiveFailures + 1, this.CONSECUTIVE_FAILURE_THRESHOLD); // Cap at threshold
       
       this.primaryHealth = {
         available: isAvailable,
         latency,
         lastCheck: new Date(),
-        consecutiveFailures: isAvailable ? 0 : this.primaryHealth.consecutiveFailures + 1
+        consecutiveFailures: newFailures
       };
+      
+      // Update Prometheus metrics
+      aiProviderHealth.set({ provider: this.primaryProvider.name, type: 'primary' }, isAvailable ? 1 : 0);
+      aiProviderConsecutiveFailures.set({ provider: this.primaryProvider.name }, newFailures);
+      aiProviderLatencyMs.observe({ provider: this.primaryProvider.name }, latency);
+      
+      // Send alert if threshold exceeded
+      if (newFailures >= this.CONSECUTIVE_FAILURE_THRESHOLD) {
+        await this.sendAlert(this.primaryProvider.name, newFailures, latestError);
+      } else if (isAvailable && this.alertSent) {
+        // Provider recovered - log recovery
+        logger.info('AI Provider recovered', {
+          provider: this.primaryProvider.name,
+          wasDown: this.alertSent
+        });
+        this.alertSent = false;
+      }
       
       logger.debug('Primary provider health check', {
         provider: this.primaryProvider.name,
         available: isAvailable,
         latency,
-        consecutiveFailures: this.primaryHealth.consecutiveFailures
+        consecutiveFailures: this.primaryHealth.consecutiveFailures,
+        cooldownReset: shouldReset && !isAvailable
       });
     } catch (error) {
-      this.primaryHealth.consecutiveFailures++;
-      logger.error('Primary provider health check failed', error instanceof Error ? error : undefined);
+      latestError = error instanceof Error ? error.message : 'unknown error';
+      const latency = Date.now() - startTime;
+      const shouldReset = this.shouldResetFailures(this.primaryHealth.lastCheck);
+      const newFailures = shouldReset ? 1 : 
+        Math.min(this.primaryHealth.consecutiveFailures + 1, this.CONSECUTIVE_FAILURE_THRESHOLD);
+      
+      // Update full health state snapshot
+      this.primaryHealth = {
+        available: false,
+        latency,
+        lastCheck: new Date(),
+        consecutiveFailures: newFailures
+      };
+      
+      // Update Prometheus metrics for error case
+      aiProviderHealth.set({ provider: this.primaryProvider.name, type: 'primary' }, 0);
+      aiProviderConsecutiveFailures.set({ provider: this.primaryProvider.name }, newFailures);
+      aiProviderLatencyMs.observe({ provider: this.primaryProvider.name }, latency);
+      
+      // Send alert if threshold exceeded
+      if (newFailures >= this.CONSECUTIVE_FAILURE_THRESHOLD) {
+        await this.sendAlert(this.primaryProvider.name, newFailures, latestError);
+      }
+      
+      logger.error('Primary provider health check failed', error instanceof Error ? error : undefined, {
+        consecutiveFailures: newFailures,
+        latency,
+        cooldownReset: shouldReset
+      });
     }
 
     if (this.fallbackProvider) {
       const fallbackStartTime = Date.now();
       try {
-        const isAvailable = await this.fallbackProvider.isAvailable();
+        const isAvailable = await this.checkWithTimeout(
+          this.fallbackProvider.isAvailable(),
+          this.HEALTH_CHECK_TIMEOUT_MS,
+          `Fallback health check timeout after ${this.HEALTH_CHECK_TIMEOUT_MS}ms`
+        );
         const latency = Date.now() - fallbackStartTime;
+        
+        const prevHealth = this.fallbackHealth || { consecutiveFailures: 0, lastCheck: new Date() } as ProviderHealth;
+        const shouldReset = isAvailable || this.shouldResetFailures(prevHealth.lastCheck);
+        const newFailures = isAvailable ? 0 :
+          shouldReset ? 1 :
+          Math.min(prevHealth.consecutiveFailures + 1, this.CONSECUTIVE_FAILURE_THRESHOLD);
         
         this.fallbackHealth = {
           available: isAvailable,
           latency,
           lastCheck: new Date(),
-          consecutiveFailures: isAvailable ? 0 : (this.fallbackHealth?.consecutiveFailures || 0) + 1
+          consecutiveFailures: newFailures
         };
+        
+        // Update Prometheus metrics for fallback
+        aiProviderHealth.set({ provider: this.fallbackProvider.name, type: 'fallback' }, isAvailable ? 1 : 0);
+        aiProviderConsecutiveFailures.set({ provider: this.fallbackProvider.name }, newFailures);
+        aiProviderLatencyMs.observe({ provider: this.fallbackProvider.name }, latency);
         
         logger.debug('Fallback provider health check', {
           provider: this.fallbackProvider.name,
@@ -125,10 +259,30 @@ class AIProviderRouter {
           consecutiveFailures: this.fallbackHealth.consecutiveFailures
         });
       } catch (error) {
-        if (this.fallbackHealth) {
-          this.fallbackHealth.consecutiveFailures++;
-        }
-        logger.error('Fallback provider health check failed', error instanceof Error ? error : undefined);
+        const latency = Date.now() - fallbackStartTime;
+        const prevHealth = this.fallbackHealth || { consecutiveFailures: 0, lastCheck: new Date() } as ProviderHealth;
+        const shouldReset = this.shouldResetFailures(prevHealth.lastCheck);
+        const newFailures = shouldReset ? 1 :
+          Math.min(prevHealth.consecutiveFailures + 1, this.CONSECUTIVE_FAILURE_THRESHOLD);
+        
+        // Update full health state snapshot for fallback
+        this.fallbackHealth = {
+          available: false,
+          latency,
+          lastCheck: new Date(),
+          consecutiveFailures: newFailures
+        };
+        
+        // Update Prometheus metrics for fallback error case
+        aiProviderHealth.set({ provider: this.fallbackProvider.name, type: 'fallback' }, 0);
+        aiProviderConsecutiveFailures.set({ provider: this.fallbackProvider.name }, newFailures);
+        aiProviderLatencyMs.observe({ provider: this.fallbackProvider.name }, latency);
+        
+        logger.error('Fallback provider health check failed', error instanceof Error ? error : undefined, {
+          consecutiveFailures: newFailures,
+          latency,
+          cooldownReset: shouldReset
+        });
       }
     }
   }
@@ -140,6 +294,9 @@ class AIProviderRouter {
           failures: this.circuitBreaker.failures
         });
         this.circuitBreaker.state = 'half-open';
+        
+        // Update circuit breaker state metric (1 = half-open)
+        aiProviderCircuitBreakerState.set({ provider: this.primaryProvider.name }, 1);
         return true;
       }
       logger.warn('Circuit breaker is open', {
@@ -161,6 +318,9 @@ class AIProviderRouter {
         failures: this.circuitBreaker.failures,
         openUntil: this.circuitBreaker.openUntil
       });
+      
+      // Update circuit breaker state metric (2 = open)
+      aiProviderCircuitBreakerState.set({ provider: this.primaryProvider.name }, 2);
     }
   }
 
@@ -171,6 +331,9 @@ class AIProviderRouter {
     this.circuitBreaker.failures = 0;
     this.circuitBreaker.state = 'closed';
     this.circuitBreaker.openUntil = null;
+    
+    // Update circuit breaker state metric (0 = closed)
+    aiProviderCircuitBreakerState.set({ provider: this.primaryProvider.name }, 0);
   }
 
   private async retryWithBackoff<T>(
@@ -330,15 +493,22 @@ class AIProviderRouter {
           logger.error('Fallback provider not available', undefined, {
             provider: this.fallbackProvider.name
           });
+          // Don't throw here, let it fall through to final error
         }
       } catch (error) {
-        logger.error('Fallback provider failed', error instanceof Error ? error : undefined);
-        throw error;
+        logger.error('Fallback provider failed after retries', error instanceof Error ? error : undefined, {
+          provider: this.fallbackProvider.name,
+          error: error instanceof Error ? error.message : String(error)
+        });
+        // Don't rethrow fallback error, provide comprehensive error message
       }
     }
 
+    // Both primary and fallback failed - provide detailed error
     const error = new AIServiceError(
-      'All AI providers are unavailable. Please check your configuration or try again later.',
+      this.fallbackProvider 
+        ? 'All AI providers are currently unavailable. Both primary and fallback providers failed. Please try again later or contact support.'
+        : 'AI service is unavailable and no fallback provider is configured. Please check your configuration or contact support.',
       503
     );
     

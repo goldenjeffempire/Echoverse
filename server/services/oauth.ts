@@ -98,11 +98,24 @@ export async function updateOAuthTokens(
   refreshToken?: string
 ): Promise<void> {
   try {
+    const { encrypt } = await import('../utils/encryption');
+    const { config } = await import('../config');
+    
+    if (!config.twoFactorEncryptionKey) {
+      throw new Error('Encryption key not configured for OAuth tokens');
+    }
+    
+    // Encrypt tokens before storing
+    const encryptedAccessToken = encrypt(accessToken, config.twoFactorEncryptionKey);
+    const encryptedRefreshToken = refreshToken 
+      ? encrypt(refreshToken, config.twoFactorEncryptionKey)
+      : null;
+    
     await db
       .update(oauthProviders)
       .set({
-        accessToken,
-        refreshToken,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
         updatedAt: new Date(),
       })
       .where(and(
@@ -110,13 +123,14 @@ export async function updateOAuthTokens(
         eq(oauthProviders.provider, provider)
       ));
 
-    logger.info('OAuth tokens updated', { userId, provider });
+    logger.info('OAuth tokens updated and encrypted', { userId, provider });
   } catch (error: any) {
     logger.error('Failed to update OAuth tokens', error instanceof Error ? error : undefined, { 
       userId,
       provider,
       errorMessage: error?.message || String(error)
     });
+    throw error;
   }
 }
 
