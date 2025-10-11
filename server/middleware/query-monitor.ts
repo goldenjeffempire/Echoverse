@@ -1,4 +1,5 @@
 import { logger } from '../logger';
+import { slowQueriesTotal, slowQueriesGauge, dbQueryDuration } from '../monitoring/metrics';
 
 export interface QueryMetrics {
   totalQueries: number;
@@ -58,11 +59,21 @@ class QueryMonitor {
 
     if (isSlow) {
       this.metrics.slowQueries++;
+      
+      // PHASE 2.2 & 5.2: Export slow query metrics to Prometheus
+      slowQueriesTotal.inc({ threshold_ms: this.slowQueryThreshold.toString() });
+      slowQueriesGauge.set(this.metrics.slowQueries);
+      
       logger.warn('Slow query detected', {
         query: this.sanitizeQuery(query),
         duration,
         threshold: this.slowQueryThreshold,
       });
+    }
+    
+    // Export query duration to Prometheus
+    if (success) {
+      dbQueryDuration.observe({ operation: 'query', table: 'unknown' }, duration / 1000);
     }
 
     if (shouldLog) {

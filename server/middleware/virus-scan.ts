@@ -61,6 +61,10 @@ export const basicVirusScan = async (req: Request, res: Response, next: NextFunc
     next();
   } catch (error) {
     console.error('Virus scan error:', error);
-    next();
+    return res.status(500).json({ 
+      error: 'File scan failed',
+      code: 'SCAN_ERROR',
+      message: 'Unable to verify file safety. Please try again or contact support.'
+    });
   }
 };
