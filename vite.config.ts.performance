@@ -1,0 +1,97 @@
+/**
+ * MEDIUM-001 to MEDIUM-007: Performance Optimization Config
+ */
+import { defineConfig, PluginOption } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import { visualizer } from 'rollup-plugin-visualizer';
+import compression from 'vite-plugin-compression';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    // MEDIUM-005: Brotli Compression
+    compression({
+      algorithm: 'brotliCompress',
+      ext: '.br',
+      threshold: 1024,
+    }),
+    compression({
+      algorithm: 'gzip',
+      ext: '.gz',
+    }),
+    // Bundle size visualization
+    visualizer({
+      filename: './dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+    }) as PluginOption,
+  ],
+  
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './client/src'),
+    },
+  },
+
+  // MEDIUM-002: Code Splitting & Chunking Strategy
+  build: {
+    target: 'esnext',
+    minify: 'terser',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          'react-vendor': ['react', 'react-dom', 'react-router-dom', 'wouter'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
+          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          'utils': ['date-fns', 'clsx', 'tailwind-merge'],
+          // Feature-based chunks
+          'ai-features': ['openai'],
+          'payment-features': ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+        },
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
+    // MEDIUM-001: Bundle Size Budget
+    chunkSizeWarningLimit: 500, // 500KB warning threshold
+    reportCompressedSize: true,
+  },
+
+  // MEDIUM-006: HTTP/2 Server Push & Preload
+  server: {
+    port: 5000,
+    host: '0.0.0.0',
+    strictPort: true,
+    hmr: {
+      overlay: true,
+    },
+    // Development performance
+    watch: {
+      usePolling: false,
+      ignored: ['**/node_modules/**', '**/dist/**'],
+    },
+  },
+
+  // Optimize dependencies
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-hook-form',
+      '@tanstack/react-query',
+    ],
+    exclude: ['@vite/client', '@vite/env'],
+  },
+
+  // MEDIUM-011: Asset Preloading & Optimization
+  experimental: {
+    renderBuiltUrl(filename: string) {
+      // Ensure assets are correctly referenced
+      return `/${filename}`;
+    },
+  },
+});

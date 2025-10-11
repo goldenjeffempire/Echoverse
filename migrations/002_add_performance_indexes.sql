@@ -5,8 +5,7 @@
 -- UP Migration
 -- Add indexes for frequently queried columns
 
--- Posts table indexes for community queries
-CREATE INDEX IF NOT EXISTS idx_posts_community_id ON posts(community_id);
+-- Posts table indexes
 CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
@@ -23,20 +22,18 @@ CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 
 -- Products table indexes
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
-CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
 
 -- Community members for N+1 query fix
 CREATE INDEX IF NOT EXISTS idx_community_members_community_id ON community_members(community_id);
 CREATE INDEX IF NOT EXISTS idx_community_members_user_id ON community_members(user_id);
 
 -- Composite indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_posts_community_status ON posts(community_id, status);
 CREATE INDEX IF NOT EXISTS idx_orders_user_status ON orders(user_id, status);
 
 -- DOWN
 -- Remove performance indexes
 
-DROP INDEX IF EXISTS idx_posts_community_id;
 DROP INDEX IF EXISTS idx_posts_user_id;
 DROP INDEX IF EXISTS idx_posts_created_at;
 DROP INDEX IF EXISTS idx_posts_status;
@@ -47,8 +44,7 @@ DROP INDEX IF EXISTS idx_orders_user_id;
 DROP INDEX IF EXISTS idx_orders_status;
 DROP INDEX IF EXISTS idx_orders_created_at;
 DROP INDEX IF EXISTS idx_products_category;
-DROP INDEX IF EXISTS idx_products_status;
+DROP INDEX IF EXISTS idx_products_is_active;
 DROP INDEX IF EXISTS idx_community_members_community_id;
 DROP INDEX IF EXISTS idx_community_members_user_id;
-DROP INDEX IF EXISTS idx_posts_community_status;
 DROP INDEX IF EXISTS idx_orders_user_status;

@@ -55,6 +55,18 @@ if [ -z "$IOS_TEAM_ID" ]; then
     exit 1
 fi
 
+# CRIT-NEW-002: Validate App Store upload credentials for release builds
+if [ "$BUILD_TYPE" = "release" ]; then
+    if [ -z "$APPLE_ID" ]; then
+        log_warn "APPLE_ID not set - App Store upload will be skipped"
+        log_info "Set it with: export APPLE_ID=your@apple-id.com"
+    fi
+    if [ -z "$APP_SPECIFIC_PASSWORD" ]; then
+        log_warn "APP_SPECIFIC_PASSWORD not set - App Store upload will be skipped"
+        log_info "Generate at: https://appleid.apple.com/account/manage (App-Specific Passwords)"
+    fi
+fi
+
 # Check for required tools
 if ! command -v xcodebuild &> /dev/null; then
     log_error "xcodebuild not found. Install Xcode first."

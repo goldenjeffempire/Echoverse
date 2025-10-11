@@ -253,6 +253,35 @@ export const products = pgTable("products", {
     weightCheck: sql `CHECK (weight IS NULL OR weight >= 0)`,
     weightUnitCheck: sql `CHECK (weight_unit IN ('kg', 'lb', 'oz', 'g'))`,
 }));
+// MISSING FEATURE FIX: Product Variants for size, color, material options
+export const productVariants = pgTable("product_variants", {
+    id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
+    productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+    sku: text("sku").unique().notNull(),
+    name: text("name").notNull(), // e.g., "Large / Red"
+    options: jsonb("options").notNull(), // { size: "Large", color: "Red" }
+    price: decimal("price", { precision: 10, scale: 2 }), // Override product price if set
+    compareAtPrice: decimal("compare_at_price", { precision: 10, scale: 2 }),
+    costPerItem: decimal("cost_per_item", { precision: 10, scale: 2 }),
+    inventory: integer("inventory").default(0).notNull(),
+    lowStockThreshold: integer("low_stock_threshold").default(10),
+    weight: decimal("weight", { precision: 10, scale: 2 }),
+    weightUnit: text("weight_unit").default("kg"),
+    image: text("image"), // Variant-specific image
+    barcode: text("barcode"),
+    position: integer("position").default(0), // Display order
+    isActive: boolean("is_active").default(true),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+    productIdIdx: index("product_variants_product_id_idx").on(table.productId),
+    skuIdx: index("product_variants_sku_idx").on(table.sku),
+    isActiveIdx: index("product_variants_is_active_idx").on(table.isActive),
+    priceCheck: sql `CHECK (price IS NULL OR price >= 0)`,
+    compareAtPriceCheck: sql `CHECK (compare_at_price IS NULL OR compare_at_price >= 0)`,
+    inventoryCheck: sql `CHECK (inventory >= 0)`,
+}));
 export const orders = pgTable("orders", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -610,6 +639,7 @@ export const notifications = pgTable("notifications", {
     createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
 }));
 // Media Library
+// CRITICAL FIX #14: Added encryption metadata for files encrypted at rest
 export const media = pgTable("media", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -621,6 +651,9 @@ export const media = pgTable("media", {
     alt: text("alt"),
     caption: text("caption"),
     metadata: jsonb("metadata"),
+    encryptionIv: text("encryption_iv"), // IV for AES-256-GCM encryption
+    encryptionAuthTag: text("encryption_auth_tag"), // Auth tag for AES-256-GCM
+    isEncrypted: boolean("is_encrypted").default(false), // Flag to indicate if file is encrypted
     createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
     userIdIdx: index("media_user_id_idx").on(table.userId),
@@ -861,6 +894,31 @@ export const aiRateLimits = pgTable("ai_rate_limits", {
     windowStartIdx: index("ai_rate_limits_window_start_idx").on(table.windowStart),
     lastRequestIdx: index("ai_rate_limits_last_request_idx").on(table.lastRequestAt),
 }));
+// MISSING FEATURE FIX: AI Provider Failover State Persistence
+// Tracks AI provider health, failures, and failover decisions for distributed deployments
+export const aiProviderFailover = pgTable("ai_provider_failover", {
+    id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
+    provider: text("provider").notNull(), // 'openai', 'local', 'anthropic', etc.
+    state: text("state").notNull().default("CLOSED"), // CLOSED, OPEN, HALF_OPEN (circuit breaker states)
+    failureCount: integer("failure_count").notNull().default(0),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    lastFailureAt: timestamp("last_failure_at"),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastHealthCheckAt: timestamp("last_health_check_at"),
+    isAvailable: boolean("is_available").default(true),
+    latencyMs: integer("latency_ms"), // Last measured latency
+    errorMessage: text("error_message"), // Last error
+    cooldownUntil: timestamp("cooldown_until"), // When circuit breaker cooldown expires
+    metadata: jsonb("metadata"), // Additional provider-specific data
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+    providerIdx: index("ai_failover_provider_idx").on(table.provider),
+    stateIdx: index("ai_failover_state_idx").on(table.state),
+    isAvailableIdx: index("ai_failover_available_idx").on(table.isAvailable),
+    lastHealthCheckIdx: index("ai_failover_health_check_idx").on(table.lastHealthCheckAt),
+    providerUnique: index("ai_failover_provider_unique").on(table.provider), // One row per provider
+}));
 // Webhook Retry Queue - Track webhook delivery attempts with exponential backoff
 export const webhookRetries = pgTable("webhook_retries", {
     id: varchar("id").primaryKey().default(sql `gen_random_uuid()`),
@@ -908,10 +966,17 @@ export const ordersRelations = relations(orders, ({ one }) => ({
         references: [users.id],
     }),
 }));
-export const productsRelations = relations(products, ({ one }) => ({
+export const productsRelations = relations(products, ({ one, many }) => ({
     user: one(users, {
         fields: [products.userId],
         references: [users.id],
+    }),
+    variants: many(productVariants),
+}));
+export const productVariantsRelations = relations(productVariants, ({ one }) => ({
+    product: one(products, {
+        fields: [productVariants.productId],
+        references: [products.id],
     }),
 }));
 export const postsRelations = relations(posts, ({ one, many }) => ({

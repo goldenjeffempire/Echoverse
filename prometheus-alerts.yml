@@ -1,0 +1,147 @@
+groups:
+  - name: echoverse_alerts
+    interval: 30s
+    rules:
+      # Database Alerts
+      - alert: DatabasePoolExhausted
+        expr: database_pool_idle_connections < 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Idle connections: {{ $value }}. May cause request blocking."
+
+      - alert: DatabaseSlowQueries
+        expr: rate(database_query_duration_seconds_sum[5m]) / rate(database_query_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database queries are slow"
+          description: "Average query time: {{ $value }}s over last 5 minutes"
+
+      - alert: DatabaseReplicationLag
+        expr: database_replication_lag_seconds > 60
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database replication lag detected"
+          description: "Replication is {{ $value }} seconds behind primary"
+
+      # WebSocket Alerts
+      - alert: WebSocketConnectionSpike
+        expr: rate(websocket_connections_total[5m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket connection spike detected"
+          description: "New connections: {{ $value }}/s over last 5 minutes"
+
+      - alert: WebSocketHighErrorRate
+        expr: rate(websocket_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High WebSocket error rate"
+          description: "{{ $value }} errors/s over last 5 minutes"
+
+      # AI Cost Alerts
+      - alert: AICostThresholdExceeded
+        expr: rate(ai_cost_total[1h]) > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AI costs exceeding threshold"
+          description: "Cost rate: ${{ $value }}/hour"
+
+      - alert: AIProviderDown
+        expr: ai_provider_health == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AI provider is down"
+          description: "{{ $labels.provider }} has been unavailable for 5+ minutes"
+
+      # HTTP Performance Alerts
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile latency is high"
+          description: "p95 latency: {{ $value }}s"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP error rate"
+          description: "{{ $value | humanizePercentage }} of requests failing"
+
+      # System Resource Alerts
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage: {{ $value }}GB"
+
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage: {{ $value | humanizePercentage }}"
+
+      # Circuit Breaker Alerts
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state{state="open"} == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is open"
+          description: "{{ $labels.service }} circuit breaker has opened due to failures"
+
+      # Rate Limiting Alerts
+      - alert: HighRateLimitHitRate
+        expr: rate(rate_limit_exceeded_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate limit hit rate"
+          description: "{{ $value }} rate limit hits/s - possible attack or misconfiguration"
+
+      # Session Security Alerts
+      - alert: SessionHijackingDetected
+        expr: rate(security_session_hijacking_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential session hijacking attack"
+          description: "{{ $value }} session hijacking attempts/s detected"
+
+      # Health Check Alerts
+      - alert: HealthCheckFailing
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service is down"
+          description: "Health check has been failing for 2+ minutes"

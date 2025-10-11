@@ -90,9 +90,15 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: false,
+    // CRITICAL FIX: Allow all hosts for Replit proxy environment
     allowedHosts: true,
+    // HMR runs through Express middleware - no separate port needed
+    // The server/vite.ts configures HMR to use the same HTTP server
     hmr: {
       clientPort: 443,
+      protocol: 'wss',
+      host: process.env.REPLIT_DOMAINS?.split(',')[0] || undefined,
+      overlay: true,
     },
     fs: {
       strict: true,

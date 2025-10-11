@@ -3,15 +3,26 @@
 # Stage 1: Dependencies
 FROM node:20-alpine AS deps
 WORKDIR /app
+# Copy only package files first for better layer caching
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+# Use npm ci with cache mounting for faster builds
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --only=production && npm cache clean --force
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
 WORKDIR /app
+# Copy package files
 COPY package*.json ./
-RUN npm ci
-COPY . .
+# Install all dependencies with cache mounting
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+# Copy source files (separate layer for better caching)
+COPY tsconfig.json ./
+COPY server ./server
+COPY client ./client
+COPY shared ./shared
+# Build application
 RUN npm run build
 
 # Stage 3: Runner
@@ -42,7 +53,7 @@ EXPOSE 5000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:5000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:5000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]

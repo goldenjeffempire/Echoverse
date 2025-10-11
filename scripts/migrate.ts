@@ -70,8 +70,41 @@ async function migrateDown() {
   const lastMigration = applied[applied.length - 1];
   console.log(`\n⏪ Rolling back migration v${lastMigration.version}: ${lastMigration.name}...\n`);
   
-  await rollbackMigration(lastMigration);
+  // CRIT-007 FIX: Create automatic backup before rollback
+  console.log('📦 Creating backup before rollback...');
+  try {
+    const { createDatabaseBackup } = await import('../server/utils/database-backup');
+    const backupPath = await createDatabaseBackup({
+      reason: `pre-rollback-v${lastMigration.version}`,
+      automated: false
+    });
+    console.log(`✅ Backup created: ${backupPath}\n`);
+  } catch (backupError) {
+    console.error('⚠️  Warning: Failed to create backup:', backupError);
+    console.log('\n⚠️  Proceed with caution - no backup was created');
+    
+    // Ask for confirmation
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const answer = await new Promise<string>((resolve) => {
+      rl.question('Continue rollback without backup? (yes/no): ', resolve);
+    });
+    rl.close();
+    
+    if (answer.toLowerCase() !== 'yes') {
+      console.log('\n❌ Rollback cancelled\n');
+      return;
+    }
+  }
+  
+  // CRIT-007 FIX: Perform rollback with safety checks and backup option
+  await rollbackMigration(lastMigration, { createBackup: true });
   console.log('\n✅ Migration rolled back successfully\n');
+  console.log('💡 Tip: Use "npm run migrate:verify" to validate database state\n');
 }
 
 async function newMigration() {

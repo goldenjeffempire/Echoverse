@@ -457,7 +457,7 @@ export const posts = pgTable("posts", {
   typeCheck: sql`CHECK (type IN ('post', 'page', 'product'))`,
 }));
 
-export const comments = pgTable("comments", {
+export const comments: any = pgTable("comments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   postId: varchar("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
   userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
@@ -465,7 +465,7 @@ export const comments = pgTable("comments", {
   authorEmail: text("author_email"),
   content: text("content").notNull(),
   status: text("status").default("pending"), // pending, approved, rejected
-  parentId: varchar("parent_id").references(() => comments.id, { onDelete: "cascade" }), // Self-referential FK for nested comments
+  parentId: varchar("parent_id").references((): any => comments.id, { onDelete: "cascade" }), // Self-referential FK for nested comments
   deletedAt: timestamp("deleted_at"), // Soft delete
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
@@ -986,6 +986,987 @@ export const webhookRetries = pgTable("webhook_retries", {
   statusIdx: index("webhook_retries_status_idx").on(table.status),
   nextRetryAtIdx: index("webhook_retries_next_retry_idx").on(table.nextRetryAt),
   createdAtIdx: index("webhook_retries_created_at_idx").on(table.createdAt),
+}));
+
+// ========== WEBSITE BUILDER - Extended Features ==========
+
+// Website Templates Marketplace
+export const websiteTemplates = pgTable("website_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  creatorId: varchar("creator_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // business, portfolio, blog, ecommerce, landing
+  industry: text("industry"), // technology, fashion, food, etc.
+  thumbnail: text("thumbnail"),
+  screenshots: jsonb("screenshots"), // Array of screenshot URLs
+  content: jsonb("content").notNull(), // Template structure
+  settings: jsonb("settings"), // Default settings
+  price: decimal("price", { precision: 10, scale: 2 }).default("0"),
+  isFree: boolean("is_free").default(true),
+  isPremium: boolean("is_premium").default(false),
+  downloadCount: integer("download_count").default(0),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0"),
+  ratingCount: integer("rating_count").default(0),
+  isActive: boolean("is_active").default(true),
+  isFeatured: boolean("is_featured").default(false),
+  tags: jsonb("tags"), // Array of tags
+  metadata: jsonb("metadata"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  creatorIdIdx: index("website_templates_creator_id_idx").on(table.creatorId),
+  categoryIdx: index("website_templates_category_idx").on(table.category),
+  industryIdx: index("website_templates_industry_idx").on(table.industry),
+  isFeaturedIdx: index("website_templates_featured_idx").on(table.isFeatured),
+  isActiveIdx: index("website_templates_is_active_idx").on(table.isActive),
+  ratingIdx: index("website_templates_rating_idx").on(table.rating),
+}));
+
+// Staging Environments
+export const stagingEnvironments = pgTable("staging_environments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  websiteId: varchar("website_id").notNull().references(() => websites.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  url: text("url").unique(),
+  content: jsonb("content"),
+  settings: jsonb("settings"),
+  status: text("status").default("active"), // active, archived
+  deployedBy: varchar("deployed_by").references(() => users.id, { onDelete: "set null" }),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  websiteIdIdx: index("staging_environments_website_id_idx").on(table.websiteId),
+  statusIdx: index("staging_environments_status_idx").on(table.status),
+}));
+
+// Webhook Integrations
+export const webhookIntegrations = pgTable("webhook_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  websiteId: varchar("website_id").references(() => websites.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  events: jsonb("events").notNull(), // Array of event types to listen to
+  headers: jsonb("headers"), // Custom headers
+  isActive: boolean("is_active").default(true),
+  secret: text("secret"), // For webhook signature verification
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  successCount: integer("success_count").default(0),
+  failureCount: integer("failure_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("webhook_integrations_user_id_idx").on(table.userId),
+  websiteIdIdx: index("webhook_integrations_website_id_idx").on(table.websiteId),
+  isActiveIdx: index("webhook_integrations_is_active_idx").on(table.isActive),
+}));
+
+// Website Builder State (for drag-and-drop persistence)
+export const builderState = pgTable("builder_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  websiteId: varchar("website_id").notNull().references(() => websites.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  currentContent: jsonb("current_content"),
+  undoStack: jsonb("undo_stack"), // Array of previous states
+  redoStack: jsonb("redo_stack"), // Array of future states
+  selectedElement: text("selected_element"),
+  viewportMode: text("viewport_mode").default("desktop"), // desktop, tablet, mobile
+  lastSavedAt: timestamp("last_saved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  websiteIdIdx: index("builder_state_website_id_idx").on(table.websiteId),
+  userIdIdx: index("builder_state_user_id_idx").on(table.userId),
+  websiteUserIdx: index("builder_state_website_user_idx").on(table.websiteId, table.userId),
+}));
+
+// ========== E-COMMERCE - Extended Features ==========
+
+// CRM Contacts
+export const crmContacts = pgTable("crm_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  phone: text("phone"),
+  company: text("company"),
+  jobTitle: text("job_title"),
+  website: text("website"),
+  address: jsonb("address"),
+  tags: jsonb("tags"),
+  stage: text("stage").default("lead"), // lead, prospect, customer, churned
+  source: text("source"),
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  lifetimeValue: decimal("lifetime_value", { precision: 10, scale: 2 }).default("0"),
+  lastContactedAt: timestamp("last_contacted_at"),
+  metadata: jsonb("metadata"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("crm_contacts_user_id_idx").on(table.userId),
+  emailIdx: index("crm_contacts_email_idx").on(table.email),
+  stageIdx: index("crm_contacts_stage_idx").on(table.stage),
+  assignedToIdx: index("crm_contacts_assigned_to_idx").on(table.assignedTo),
+}));
+
+// CRM Interactions
+export const crmInteractions = pgTable("crm_interactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contactId: varchar("contact_id").notNull().references(() => crmContacts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // call, email, meeting, note, task
+  subject: text("subject"),
+  description: text("description"),
+  outcome: text("outcome"),
+  scheduledAt: timestamp("scheduled_at"),
+  completedAt: timestamp("completed_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  contactIdIdx: index("crm_interactions_contact_id_idx").on(table.contactId),
+  userIdIdx: index("crm_interactions_user_id_idx").on(table.userId),
+  typeIdx: index("crm_interactions_type_idx").on(table.type),
+  scheduledAtIdx: index("crm_interactions_scheduled_at_idx").on(table.scheduledAt),
+}));
+
+// Multi-Channel Integrations
+export const channelIntegrations = pgTable("channel_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(), // shopify, amazon, ebay, etsy, walmart
+  accountId: text("account_id").notNull(),
+  accessToken: text("access_token"), // Encrypted
+  refreshToken: text("refresh_token"), // Encrypted
+  shopUrl: text("shop_url"),
+  isActive: boolean("is_active").default(true),
+  syncEnabled: boolean("sync_enabled").default(true),
+  lastSyncAt: timestamp("last_sync_at"),
+  syncStatus: text("sync_status").default("idle"), // idle, syncing, error
+  syncError: text("sync_error"),
+  settings: jsonb("settings"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("channel_integrations_user_id_idx").on(table.userId),
+  channelIdx: index("channel_integrations_channel_idx").on(table.channel),
+  isActiveIdx: index("channel_integrations_is_active_idx").on(table.isActive),
+}));
+
+// Tax Rules
+export const taxRules = pgTable("tax_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  country: text("country").notNull(),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  rate: decimal("rate", { precision: 5, scale: 2 }).notNull(), // Percentage
+  isCompound: boolean("is_compound").default(false),
+  priority: integer("priority").default(0),
+  applicableProductTypes: jsonb("applicable_product_types"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("tax_rules_user_id_idx").on(table.userId),
+  countryIdx: index("tax_rules_country_idx").on(table.country),
+  stateIdx: index("tax_rules_state_idx").on(table.state),
+  isActiveIdx: index("tax_rules_is_active_idx").on(table.isActive),
+}));
+
+// Subscription Plans
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  billingPeriod: text("billing_period").notNull(), // monthly, yearly, weekly
+  trialDays: integer("trial_days").default(0),
+  features: jsonb("features"), // Array of feature names
+  limits: jsonb("limits"), // Resource limits
+  stripePriceId: text("stripe_price_id"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  isActiveIdx: index("subscription_plans_is_active_idx").on(table.isActive),
+}));
+
+// Invoices
+export const invoices = pgTable("invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orderId: varchar("order_id").references(() => orders.id, { onDelete: "set null" }),
+  invoiceNumber: text("invoice_number").unique().notNull(),
+  status: text("status").default("draft"), // draft, sent, paid, overdue, cancelled
+  dueDate: timestamp("due_date"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  taxTotal: decimal("tax_total", { precision: 10, scale: 2 }).default("0"),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("usd"),
+  items: jsonb("items").notNull(),
+  customerInfo: jsonb("customer_info").notNull(),
+  notes: text("notes"),
+  pdfUrl: text("pdf_url"),
+  sentAt: timestamp("sent_at"),
+  paidAt: timestamp("paid_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("invoices_user_id_idx").on(table.userId),
+  orderIdIdx: index("invoices_order_id_idx").on(table.orderId),
+  invoiceNumberIdx: index("invoices_invoice_number_idx").on(table.invoiceNumber),
+  statusIdx: index("invoices_status_idx").on(table.status),
+  dueDateIdx: index("invoices_due_date_idx").on(table.dueDate),
+}));
+
+// Shipping Providers
+export const shippingProviders = pgTable("shipping_providers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // FedEx, UPS, USPS, DHL
+  accountId: text("account_id"),
+  apiKey: text("api_key"), // Encrypted
+  apiSecret: text("api_secret"), // Encrypted
+  isActive: boolean("is_active").default(true),
+  isDefault: boolean("is_default").default(false),
+  settings: jsonb("settings"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("shipping_providers_user_id_idx").on(table.userId),
+  isActiveIdx: index("shipping_providers_is_active_idx").on(table.isActive),
+}));
+
+// Shipping Rates
+export const shippingRates = pgTable("shipping_rates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  providerId: varchar("provider_id").notNull().references(() => shippingProviders.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  serviceCode: text("service_code").notNull(),
+  countries: jsonb("countries"), // Array of applicable countries
+  weightMin: decimal("weight_min", { precision: 10, scale: 2 }),
+  weightMax: decimal("weight_max", { precision: 10, scale: 2 }),
+  baseRate: decimal("base_rate", { precision: 10, scale: 2 }).notNull(),
+  perWeightRate: decimal("per_weight_rate", { precision: 10, scale: 2 }).default("0"),
+  deliveryDaysMin: integer("delivery_days_min"),
+  deliveryDaysMax: integer("delivery_days_max"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  providerIdIdx: index("shipping_rates_provider_id_idx").on(table.providerId),
+  isActiveIdx: index("shipping_rates_is_active_idx").on(table.isActive),
+}));
+
+// ========== CMS - Extended Features ==========
+
+// Content Scheduling
+export const contentSchedule = pgTable("content_schedule", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: varchar("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  status: text("status").default("scheduled"), // scheduled, published, cancelled, failed
+  publishedAt: timestamp("published_at"),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  postIdIdx: index("content_schedule_post_id_idx").on(table.postId),
+  userIdIdx: index("content_schedule_user_id_idx").on(table.userId),
+  scheduledForIdx: index("content_schedule_scheduled_for_idx").on(table.scheduledFor),
+  statusIdx: index("content_schedule_status_idx").on(table.status),
+}));
+
+// Content Moderation
+export const contentModeration = pgTable("content_moderation", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  contentType: text("content_type").notNull(), // post, comment, media, etc.
+  contentId: varchar("content_id").notNull(),
+  status: text("status").default("pending"), // pending, approved, rejected, flagged
+  moderatorId: varchar("moderator_id").references(() => users.id, { onDelete: "set null" }),
+  reason: text("reason"),
+  aiScore: decimal("ai_score", { precision: 5, scale: 2 }), // AI confidence score
+  flags: jsonb("flags"), // Array of detected issues
+  reviewNotes: text("review_notes"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  contentTypeIdx: index("content_moderation_content_type_idx").on(table.contentType),
+  contentIdIdx: index("content_moderation_content_id_idx").on(table.contentId),
+  statusIdx: index("content_moderation_status_idx").on(table.status),
+  moderatorIdIdx: index("content_moderation_moderator_id_idx").on(table.moderatorId),
+}));
+
+// RSS Feeds
+export const rssFeeds = pgTable("rss_feeds", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  url: text("url").unique().notNull(),
+  filter: jsonb("filter"), // Content filtering criteria
+  itemsIncluded: jsonb("items_included"), // Categories, tags to include
+  isActive: boolean("is_active").default(true),
+  lastGenerated: timestamp("last_generated"),
+  subscriberCount: integer("subscriber_count").default(0),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("rss_feeds_user_id_idx").on(table.userId),
+  urlIdx: index("rss_feeds_url_idx").on(table.url),
+  isActiveIdx: index("rss_feeds_is_active_idx").on(table.isActive),
+}));
+
+// Content Roles & Permissions
+export const contentRoles = pgTable("content_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  permissions: jsonb("permissions").notNull(), // Array of permission strings
+  isSystem: boolean("is_system").default(false), // System roles can't be deleted
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  nameIdx: index("content_roles_name_idx").on(table.name),
+}));
+
+export const userContentRoles = pgTable("user_content_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  roleId: varchar("role_id").notNull().references(() => contentRoles.id, { onDelete: "cascade" }),
+  scope: text("scope"), // global, website, post specific
+  scopeId: varchar("scope_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("user_content_roles_user_id_idx").on(table.userId),
+  roleIdIdx: index("user_content_roles_role_id_idx").on(table.roleId),
+  scopeIdx: index("user_content_roles_scope_idx").on(table.scope, table.scopeId),
+}));
+
+// ========== COMMUNITY - Extended Features ==========
+
+// Forums
+export const forums = pgTable("forums", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  communityId: varchar("community_id").notNull().references(() => communities.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  slug: text("slug").notNull(),
+  icon: text("icon"),
+  position: integer("position").default(0),
+  isLocked: boolean("is_locked").default(false),
+  topicCount: integer("topic_count").default(0),
+  postCount: integer("post_count").default(0),
+  lastPostAt: timestamp("last_post_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  communityIdIdx: index("forums_community_id_idx").on(table.communityId),
+  slugIdx: index("forums_slug_idx").on(table.slug),
+  positionIdx: index("forums_position_idx").on(table.position),
+}));
+
+// Forum Topics (Threads)
+export const forumTopics = pgTable("forum_topics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  forumId: varchar("forum_id").notNull().references(() => forums.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  content: text("content").notNull(),
+  isPinned: boolean("is_pinned").default(false),
+  isLocked: boolean("is_locked").default(false),
+  viewCount: integer("view_count").default(0),
+  replyCount: integer("reply_count").default(0),
+  voteCount: integer("vote_count").default(0),
+  lastReplyAt: timestamp("last_reply_at"),
+  lastReplyBy: varchar("last_reply_by").references(() => users.id, { onDelete: "set null" }),
+  tags: jsonb("tags"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  forumIdIdx: index("forum_topics_forum_id_idx").on(table.forumId),
+  userIdIdx: index("forum_topics_user_id_idx").on(table.userId),
+  slugIdx: index("forum_topics_slug_idx").on(table.slug),
+  isPinnedIdx: index("forum_topics_is_pinned_idx").on(table.isPinned),
+  lastReplyAtIdx: index("forum_topics_last_reply_at_idx").on(table.lastReplyAt),
+}));
+
+// Forum Replies
+export const forumReplies = pgTable("forum_replies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  topicId: varchar("topic_id").notNull().references(() => forumTopics.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  parentReplyId: varchar("parent_reply_id"),
+  voteCount: integer("vote_count").default(0),
+  isAccepted: boolean("is_accepted").default(false),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  topicIdIdx: index("forum_replies_topic_id_idx").on(table.topicId),
+  userIdIdx: index("forum_replies_user_id_idx").on(table.userId),
+  parentReplyIdIdx: index("forum_replies_parent_reply_id_idx").on(table.parentReplyId),
+}));
+
+// Forum Votes
+export const forumVotes = pgTable("forum_votes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  voteableType: text("voteable_type").notNull(), // topic, reply
+  voteableId: varchar("voteable_id").notNull(),
+  value: integer("value").notNull(), // 1 for upvote, -1 for downvote
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("forum_votes_user_id_idx").on(table.userId),
+  voteableIdx: index("forum_votes_voteable_idx").on(table.voteableType, table.voteableId),
+  userVoteableIdx: index("forum_votes_user_voteable_idx").on(table.userId, table.voteableType, table.voteableId),
+}));
+
+// Chat Rooms
+export const chatRooms = pgTable("chat_rooms", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name"),
+  type: text("type").notNull(), // direct, group, community, support
+  communityId: varchar("community_id").references(() => communities.id, { onDelete: "cascade" }),
+  createdBy: varchar("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  icon: text("icon"),
+  lastMessageAt: timestamp("last_message_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  typeIdx: index("chat_rooms_type_idx").on(table.type),
+  communityIdIdx: index("chat_rooms_community_id_idx").on(table.communityId),
+  createdByIdx: index("chat_rooms_created_by_idx").on(table.createdBy),
+  lastMessageAtIdx: index("chat_rooms_last_message_at_idx").on(table.lastMessageAt),
+}));
+
+// Chat Room Members
+export const chatRoomMembers = pgTable("chat_room_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roomId: varchar("room_id").notNull().references(() => chatRooms.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").default("member"), // member, admin
+  lastReadAt: timestamp("last_read_at"),
+  notificationsEnabled: boolean("notifications_enabled").default(true),
+  joinedAt: timestamp("joined_at").defaultNow(),
+}, (table) => ({
+  roomIdIdx: index("chat_room_members_room_id_idx").on(table.roomId),
+  userIdIdx: index("chat_room_members_user_id_idx").on(table.userId),
+  roomUserIdx: index("chat_room_members_room_user_idx").on(table.roomId, table.userId),
+}));
+
+// Chat Messages (Extended)
+export const chatMessages = pgTable("chat_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roomId: varchar("room_id").notNull().references(() => chatRooms.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  type: text("type").default("text"), // text, image, file, system
+  attachments: jsonb("attachments"),
+  replyToId: varchar("reply_to_id"),
+  isEdited: boolean("is_edited").default(false),
+  editedAt: timestamp("edited_at"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  roomIdIdx: index("chat_messages_room_id_idx").on(table.roomId),
+  senderIdIdx: index("chat_messages_sender_id_idx").on(table.senderId),
+  createdAtIdx: index("chat_messages_created_at_idx").on(table.createdAt),
+  replyToIdIdx: index("chat_messages_reply_to_id_idx").on(table.replyToId),
+}));
+
+// Moderation Actions
+export const moderationActions = pgTable("moderation_actions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  moderatorId: varchar("moderator_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetType: text("target_type").notNull(), // user, post, comment, message
+  targetId: varchar("target_id").notNull(),
+  targetUserId: varchar("target_user_id").references(() => users.id, { onDelete: "set null" }),
+  action: text("action").notNull(), // warn, mute, ban, delete, approve
+  reason: text("reason"),
+  duration: integer("duration"), // Duration in minutes for temporary actions
+  expiresAt: timestamp("expires_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  moderatorIdIdx: index("moderation_actions_moderator_id_idx").on(table.moderatorId),
+  targetTypeIdx: index("moderation_actions_target_type_idx").on(table.targetType),
+  targetIdIdx: index("moderation_actions_target_id_idx").on(table.targetId),
+  targetUserIdIdx: index("moderation_actions_target_user_id_idx").on(table.targetUserId),
+  actionIdx: index("moderation_actions_action_idx").on(table.action),
+}));
+
+// Social Media Connections
+export const socialMediaConnections = pgTable("social_media_connections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  platform: text("platform").notNull(), // twitter, facebook, linkedin, instagram
+  accountId: text("account_id").notNull(),
+  accountName: text("account_name"),
+  accessToken: text("access_token"), // Encrypted
+  refreshToken: text("refresh_token"), // Encrypted
+  expiresAt: timestamp("expires_at"),
+  isActive: boolean("is_active").default(true),
+  permissions: jsonb("permissions"), // Granted permissions
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("social_media_connections_user_id_idx").on(table.userId),
+  platformIdx: index("social_media_connections_platform_idx").on(table.platform),
+  isActiveIdx: index("social_media_connections_is_active_idx").on(table.isActive),
+}));
+
+// ========== MARKETING - Extended Features ==========
+
+// Marketing Segments
+export const marketingSegments = pgTable("marketing_segments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  conditions: jsonb("conditions").notNull(), // Segmentation rules
+  memberCount: integer("member_count").default(0),
+  isActive: boolean("is_active").default(true),
+  isDynamic: boolean("is_dynamic").default(true), // Auto-update based on conditions
+  lastCalculatedAt: timestamp("last_calculated_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("marketing_segments_user_id_idx").on(table.userId),
+  isActiveIdx: index("marketing_segments_is_active_idx").on(table.isActive),
+  isDynamicIdx: index("marketing_segments_is_dynamic_idx").on(table.isDynamic),
+}));
+
+// Segment Members
+export const segmentMembers = pgTable("segment_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  segmentId: varchar("segment_id").notNull().references(() => marketingSegments.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id").references(() => crmContacts.id, { onDelete: "cascade" }),
+  leadId: varchar("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+  addedAt: timestamp("added_at").defaultNow(),
+}, (table) => ({
+  segmentIdIdx: index("segment_members_segment_id_idx").on(table.segmentId),
+  contactIdIdx: index("segment_members_contact_id_idx").on(table.contactId),
+  leadIdIdx: index("segment_members_lead_id_idx").on(table.leadId),
+}));
+
+// Landing Pages
+export const landingPages = pgTable("landing_pages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  template: text("template"),
+  content: jsonb("content"),
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  status: text("status").default("draft"), // draft, published, archived
+  viewCount: integer("view_count").default(0),
+  conversionCount: integer("conversion_count").default(0),
+  conversionRate: decimal("conversion_rate", { precision: 5, scale: 2 }).default("0"),
+  metadata: jsonb("metadata"),
+  publishedAt: timestamp("published_at"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("landing_pages_user_id_idx").on(table.userId),
+  slugIdx: index("landing_pages_slug_idx").on(table.slug),
+  statusIdx: index("landing_pages_status_idx").on(table.status),
+}));
+
+// Automation Workflows
+export const automationWorkflows = pgTable("automation_workflows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  trigger: jsonb("trigger").notNull(), // Trigger configuration
+  conditions: jsonb("conditions"), // Optional conditions
+  actions: jsonb("actions").notNull(), // Array of actions to execute
+  status: text("status").default("active"), // active, paused, archived
+  executionCount: integer("execution_count").default(0),
+  lastExecutedAt: timestamp("last_executed_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("automation_workflows_user_id_idx").on(table.userId),
+  statusIdx: index("automation_workflows_status_idx").on(table.status),
+}));
+
+// Workflow Executions
+export const workflowExecutions = pgTable("workflow_executions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workflowId: varchar("workflow_id").notNull().references(() => automationWorkflows.id, { onDelete: "cascade" }),
+  status: text("status").default("pending"), // pending, running, completed, failed
+  triggerData: jsonb("trigger_data"),
+  result: jsonb("result"),
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  workflowIdIdx: index("workflow_executions_workflow_id_idx").on(table.workflowId),
+  statusIdx: index("workflow_executions_status_idx").on(table.status),
+  createdAtIdx: index("workflow_executions_created_at_idx").on(table.createdAt),
+}));
+
+// ========== MARKETPLACE - Extended Features ==========
+
+// Plugin Dependencies
+export const pluginDependencies = pgTable("plugin_dependencies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pluginId: varchar("plugin_id").notNull().references(() => plugins.id, { onDelete: "cascade" }),
+  dependsOnPluginId: varchar("depends_on_plugin_id").notNull().references(() => plugins.id, { onDelete: "cascade" }),
+  minVersion: text("min_version"),
+  maxVersion: text("max_version"),
+  isRequired: boolean("is_required").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  pluginIdIdx: index("plugin_dependencies_plugin_id_idx").on(table.pluginId),
+  dependsOnIdIdx: index("plugin_dependencies_depends_on_idx").on(table.dependsOnPluginId),
+}));
+
+// Plugin Licenses
+export const pluginLicenses = pgTable("plugin_licenses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pluginId: varchar("plugin_id").notNull().references(() => plugins.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // free, premium, enterprise, lifetime
+  key: text("key").unique().notNull(),
+  activations: integer("activations").default(0),
+  maxActivations: integer("max_activations").default(1),
+  expiresAt: timestamp("expires_at"),
+  isActive: boolean("is_active").default(true),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  pluginIdIdx: index("plugin_licenses_plugin_id_idx").on(table.pluginId),
+  userIdIdx: index("plugin_licenses_user_id_idx").on(table.userId),
+  keyIdx: index("plugin_licenses_key_idx").on(table.key),
+  isActiveIdx: index("plugin_licenses_is_active_idx").on(table.isActive),
+}));
+
+// Developer Payouts
+export const developerPayouts = pgTable("developer_payouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  developerId: varchar("developer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").default("usd"),
+  status: text("status").default("pending"), // pending, processing, completed, failed
+  paymentMethod: text("payment_method"), // stripe, paypal, bank_transfer
+  transactionId: text("transaction_id"),
+  period: jsonb("period"), // { from, to }
+  pluginsSales: jsonb("plugins_sales"), // Revenue breakdown by plugin
+  metadata: jsonb("metadata"),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  developerIdIdx: index("developer_payouts_developer_id_idx").on(table.developerId),
+  statusIdx: index("developer_payouts_status_idx").on(table.status),
+  createdAtIdx: index("developer_payouts_created_at_idx").on(table.createdAt),
+}));
+
+// Plugin Reviews
+export const pluginReviews = pgTable("plugin_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pluginId: varchar("plugin_id").notNull().references(() => plugins.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(),
+  title: text("title"),
+  review: text("review"),
+  helpfulCount: integer("helpful_count").default(0),
+  verified: boolean("verified").default(false), // Verified purchase
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  pluginIdIdx: index("plugin_reviews_plugin_id_idx").on(table.pluginId),
+  userIdIdx: index("plugin_reviews_user_id_idx").on(table.userId),
+  ratingIdx: index("plugin_reviews_rating_idx").on(table.rating),
+  ratingCheck: sql`CHECK (rating >= 1 AND rating <= 5)`,
+}));
+
+// ========== SECURITY & COMPLIANCE - Extended Features ==========
+
+// SSL Certificates
+export const sslCertificates = pgTable("ssl_certificates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  domain: text("domain").notNull(),
+  provider: text("provider").default("letsencrypt"), // letsencrypt, custom
+  certificate: text("certificate"), // Encrypted
+  privateKey: text("private_key"), // Encrypted
+  chainCertificate: text("chain_certificate"),
+  status: text("status").default("pending"), // pending, active, expired, revoked
+  issuedAt: timestamp("issued_at"),
+  expiresAt: timestamp("expires_at"),
+  autoRenew: boolean("auto_renew").default(true),
+  lastRenewalAttempt: timestamp("last_renewal_attempt"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("ssl_certificates_user_id_idx").on(table.userId),
+  domainIdx: index("ssl_certificates_domain_idx").on(table.domain),
+  statusIdx: index("ssl_certificates_status_idx").on(table.status),
+  expiresAtIdx: index("ssl_certificates_expires_at_idx").on(table.expiresAt),
+}));
+
+// GDPR Requests
+export const gdprRequests = pgTable("gdpr_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // data_export, data_deletion, rectification
+  status: text("status").default("pending"), // pending, processing, completed, rejected
+  requestedAt: timestamp("requested_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  completedAt: timestamp("completed_at"),
+  dataExportUrl: text("data_export_url"), // For export requests
+  expiresAt: timestamp("expires_at"), // When export link expires
+  reason: text("reason"),
+  processorNotes: text("processor_notes"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("gdpr_requests_user_id_idx").on(table.userId),
+  typeIdx: index("gdpr_requests_type_idx").on(table.type),
+  statusIdx: index("gdpr_requests_status_idx").on(table.status),
+}));
+
+// Backup Jobs
+export const backupJobs = pgTable("backup_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // full, incremental, differential
+  status: text("status").default("pending"), // pending, running, completed, failed
+  backupPath: text("backup_path"),
+  fileSize: integer("file_size"), // In bytes
+  duration: integer("duration"), // In seconds
+  errorMessage: text("error_message"),
+  tablesBackedUp: jsonb("tables_backed_up"), // Array of table names
+  retentionDays: integer("retention_days").default(30),
+  isEncrypted: boolean("is_encrypted").default(true),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  expiresAt: timestamp("expires_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  typeIdx: index("backup_jobs_type_idx").on(table.type),
+  statusIdx: index("backup_jobs_status_idx").on(table.status),
+  completedAtIdx: index("backup_jobs_completed_at_idx").on(table.completedAt),
+  expiresAtIdx: index("backup_jobs_expires_at_idx").on(table.expiresAt),
+}));
+
+// Compliance Reports
+export const complianceReports = pgTable("compliance_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  reportType: text("report_type").notNull(), // gdpr, pci_dss, soc2, hipaa
+  period: jsonb("period").notNull(), // { from, to }
+  status: text("status").default("generating"), // generating, completed, failed
+  findings: jsonb("findings"), // Compliance findings and issues
+  recommendations: jsonb("recommendations"),
+  score: decimal("score", { precision: 5, scale: 2 }), // Compliance score
+  reportUrl: text("report_url"),
+  generatedAt: timestamp("generated_at"),
+  expiresAt: timestamp("expires_at"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("compliance_reports_user_id_idx").on(table.userId),
+  reportTypeIdx: index("compliance_reports_report_type_idx").on(table.reportType),
+  statusIdx: index("compliance_reports_status_idx").on(table.status),
+  createdAtIdx: index("compliance_reports_created_at_idx").on(table.createdAt),
+}));
+
+// ========== USER MANAGEMENT - Extended Features ==========
+
+// SSO Configurations
+export const ssoConfigurations = pgTable("sso_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(), // saml, oauth, oidc
+  name: text("name").notNull(),
+  entityId: text("entity_id"),
+  ssoUrl: text("sso_url"),
+  certificate: text("certificate"), // For SAML
+  clientId: text("client_id"), // For OAuth/OIDC
+  clientSecret: text("client_secret"), // Encrypted
+  scopes: jsonb("scopes"),
+  isActive: boolean("is_active").default(true),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("sso_configurations_user_id_idx").on(table.userId),
+  providerIdx: index("sso_configurations_provider_idx").on(table.provider),
+  isActiveIdx: index("sso_configurations_is_active_idx").on(table.isActive),
+}));
+
+// Helpdesk Tickets
+export const helpdeskTickets = pgTable("helpdesk_tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  status: text("status").default("open"), // open, in_progress, waiting, resolved, closed
+  priority: text("priority").default("medium"), // low, medium, high, urgent
+  category: text("category"), // technical, billing, general, etc.
+  assignedTo: varchar("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  firstResponseAt: timestamp("first_response_at"),
+  resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
+  tags: jsonb("tags"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("helpdesk_tickets_user_id_idx").on(table.userId),
+  statusIdx: index("helpdesk_tickets_status_idx").on(table.status),
+  priorityIdx: index("helpdesk_tickets_priority_idx").on(table.priority),
+  assignedToIdx: index("helpdesk_tickets_assigned_to_idx").on(table.assignedTo),
+  createdAtIdx: index("helpdesk_tickets_created_at_idx").on(table.createdAt),
+}));
+
+// Helpdesk Responses
+export const helpdeskResponses = pgTable("helpdesk_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ticketId: varchar("ticket_id").notNull().references(() => helpdeskTickets.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  isInternal: boolean("is_internal").default(false), // Internal notes
+  attachments: jsonb("attachments"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  ticketIdIdx: index("helpdesk_responses_ticket_id_idx").on(table.ticketId),
+  userIdIdx: index("helpdesk_responses_user_id_idx").on(table.userId),
+  createdAtIdx: index("helpdesk_responses_created_at_idx").on(table.createdAt),
+}));
+
+// Knowledge Base Categories
+export const knowledgeBaseCategories = pgTable("knowledge_base_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").unique().notNull(),
+  description: text("description"),
+  icon: text("icon"),
+  parentId: varchar("parent_id"),
+  position: integer("position").default(0),
+  articleCount: integer("article_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  slugIdx: index("knowledge_base_categories_slug_idx").on(table.slug),
+  parentIdIdx: index("knowledge_base_categories_parent_id_idx").on(table.parentId),
+  positionIdx: index("knowledge_base_categories_position_idx").on(table.position),
+}));
+
+// Knowledge Base Articles
+export const knowledgeBaseArticles = pgTable("knowledge_base_articles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  authorId: varchar("author_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id").references(() => knowledgeBaseCategories.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  slug: text("slug").unique().notNull(),
+  content: text("content").notNull(),
+  excerpt: text("excerpt"),
+  status: text("status").default("draft"), // draft, published, archived
+  viewCount: integer("view_count").default(0),
+  helpfulCount: integer("helpful_count").default(0),
+  unhelpfulCount: integer("unhelpful_count").default(0),
+  tags: jsonb("tags"),
+  relatedArticles: jsonb("related_articles"), // Array of article IDs
+  metadata: jsonb("metadata"),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  authorIdIdx: index("knowledge_base_articles_author_id_idx").on(table.authorId),
+  categoryIdIdx: index("knowledge_base_articles_category_id_idx").on(table.categoryId),
+  slugIdx: index("knowledge_base_articles_slug_idx").on(table.slug),
+  statusIdx: index("knowledge_base_articles_status_idx").on(table.status),
+}));
+
+// ========== AI - Extended Features ==========
+
+// AI Training Data
+export const aiTrainingData = pgTable("ai_training_data", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  dataType: text("data_type").notNull(), // website_gen, content_gen, chatbot, prediction
+  input: jsonb("input").notNull(),
+  output: jsonb("output").notNull(),
+  feedback: jsonb("feedback"), // User feedback on quality
+  qualityScore: decimal("quality_score", { precision: 5, scale: 2 }),
+  isApproved: boolean("is_approved").default(false),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("ai_training_data_user_id_idx").on(table.userId),
+  dataTypeIdx: index("ai_training_data_data_type_idx").on(table.dataType),
+  isApprovedIdx: index("ai_training_data_is_approved_idx").on(table.isApproved),
+  createdAtIdx: index("ai_training_data_created_at_idx").on(table.createdAt),
+}));
+
+// Predictive Analytics Models
+export const predictiveModels = pgTable("predictive_models", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // sales_forecast, churn_prediction, recommendation, demand_forecast
+  version: text("version").notNull(),
+  status: text("status").default("training"), // training, active, deprecated
+  accuracy: decimal("accuracy", { precision: 5, scale: 2 }),
+  parameters: jsonb("parameters"),
+  trainingData: jsonb("training_data"), // Reference to training dataset
+  trainedAt: timestamp("trained_at"),
+  deployedAt: timestamp("deployed_at"),
+  lastPredictionAt: timestamp("last_prediction_at"),
+  predictionCount: integer("prediction_count").default(0),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  typeIdx: index("predictive_models_type_idx").on(table.type),
+  statusIdx: index("predictive_models_status_idx").on(table.status),
+  versionIdx: index("predictive_models_version_idx").on(table.version),
+}));
+
+// AI Predictions
+export const aiPredictions = pgTable("ai_predictions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  modelId: varchar("model_id").notNull().references(() => predictiveModels.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  inputData: jsonb("input_data").notNull(),
+  prediction: jsonb("prediction").notNull(),
+  confidence: decimal("confidence", { precision: 5, scale: 2 }),
+  actualOutcome: jsonb("actual_outcome"), // For model validation
+  wasAccurate: boolean("was_accurate"),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  modelIdIdx: index("ai_predictions_model_id_idx").on(table.modelId),
+  userIdIdx: index("ai_predictions_user_id_idx").on(table.userId),
+  createdAtIdx: index("ai_predictions_created_at_idx").on(table.createdAt),
 }));
 
 // Drizzle Relations for Eager Loading (fixes N+1 query issues)

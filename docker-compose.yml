@@ -60,6 +60,12 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: ${NODE_ENV:-production}
+      cache_from:
+        - echoverse-app:latest
+      # Enable BuildKit for better caching
+      x-bake:
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache
     container_name: echoverse-app
     restart: unless-stopped
     ports:
