@@ -6,9 +6,12 @@ import { config } from '../config';
 
 /**
  * Clean up old password history entries
- * Keeps only the most recent N passwords per user (default 5)
+ * Keeps only the most recent N passwords per user (default 12 per industry standard)
+ * 
+ * Industry best practices recommend keeping 12-24 password history entries
+ * to prevent password cycling and enforce meaningful password changes
  */
-export async function cleanupPasswordHistory(keepPerUser: number = 5): Promise<number> {
+export async function cleanupPasswordHistory(keepPerUser: number = 12): Promise<number> {
   try {
     // Delete old password history entries, keeping only the most recent N per user
     const result = await db.execute(sql`
@@ -91,10 +94,10 @@ export async function cleanupOldLoginAttempts(daysToKeep: number = 30): Promise<
  * Initialize database cleanup jobs
  */
 export function initializeDatabaseCleanup() {
-  // Clean up password history at startup
-  cleanupPasswordHistory().then(count => {
+  // Clean up password history at startup (keep 12 per industry standard)
+  cleanupPasswordHistory(12).then(count => {
     if (count > 0) {
-      logger.info('Startup password history cleanup complete', { count });
+      logger.info('Startup password history cleanup complete', { count, kept: 12 });
     }
   });
   
@@ -105,9 +108,9 @@ export function initializeDatabaseCleanup() {
     }
   });
   
-  // Schedule password history cleanup every 24 hours
+  // Schedule password history cleanup every 24 hours (keep 12)
   setInterval(async () => {
-    await cleanupPasswordHistory();
+    await cleanupPasswordHistory(12);
   }, 24 * 60 * 60 * 1000);
   
   // Schedule reset token cleanup every hour

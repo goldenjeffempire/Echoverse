@@ -46,22 +46,26 @@ export function encrypt(text: string, password: string): string {
  * Decrypt data using AES-256-GCM
  */
 export function decrypt(encryptedData: string, password: string): string {
-  const buffer = Buffer.from(encryptedData, 'base64');
-  
-  const salt = buffer.subarray(0, SALT_LENGTH);
-  const iv = buffer.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
-  const authTag = buffer.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
-  const encrypted = buffer.subarray(SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
-  
-  const key = deriveKey(password, salt);
-  
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-  
-  let decrypted = decipher.update(encrypted.toString('hex'), 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  
-  return decrypted;
+  try {
+    const buffer = Buffer.from(encryptedData, 'base64');
+    
+    const salt = buffer.subarray(0, SALT_LENGTH);
+    const iv = buffer.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
+    const authTag = buffer.subarray(SALT_LENGTH + IV_LENGTH, SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
+    const encrypted = buffer.subarray(SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH);
+    
+    const key = deriveKey(password, salt);
+    
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    
+    let decrypted = decipher.update(encrypted.toString('hex'), 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  } catch (error) {
+    throw new Error(`Decryption failed: ${error instanceof Error ? error.message : 'Invalid encrypted data or password'}`);
+  }
 }
 
 /**
@@ -100,4 +104,60 @@ export function generateSecureToken(bytes: number = 32): string {
  */
 export function hashData(data: string): string {
   return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+/**
+ * Field-Level Encryption for PII (SSN, Credit Cards, etc.)
+ * PHASE A: Critical Security - Encrypt sensitive personal data
+ */
+
+const FIELD_ENCRYPTION_KEY = process.env.FIELD_ENCRYPTION_KEY || process.env.SESSION_SECRET;
+
+export function encryptSensitiveField(data: string): string {
+  if (!FIELD_ENCRYPTION_KEY) {
+    throw new Error('FIELD_ENCRYPTION_KEY not configured');
+  }
+  return encrypt(data, FIELD_ENCRYPTION_KEY);
+}
+
+export function decryptSensitiveField(encryptedData: string): string {
+  if (!FIELD_ENCRYPTION_KEY) {
+    throw new Error('FIELD_ENCRYPTION_KEY not configured');
+  }
+  return decrypt(encryptedData, FIELD_ENCRYPTION_KEY);
+}
+
+export function encryptSSN(ssn: string): string {
+  const cleaned = ssn.replace(/[^0-9]/g, '');
+  if (cleaned.length !== 9) {
+    throw new Error('Invalid SSN format');
+  }
+  return encryptSensitiveField(cleaned);
+}
+
+export function decryptSSN(encryptedSSN: string): string {
+  const decrypted = decryptSensitiveField(encryptedSSN);
+  return `${decrypted.slice(0,3)}-${decrypted.slice(3,5)}-${decrypted.slice(5)}`;
+}
+
+export function encryptCreditCard(cardNumber: string): string {
+  const cleaned = cardNumber.replace(/[^0-9]/g, '');
+  if (cleaned.length < 13 || cleaned.length > 19) {
+    throw new Error('Invalid credit card format');
+  }
+  return encryptSensitiveField(cleaned);
+}
+
+export function decryptCreditCard(encryptedCard: string): string {
+  return decryptSensitiveField(encryptedCard);
+}
+
+export function maskCreditCard(encryptedCard: string): string {
+  try {
+    const decrypted = decryptCreditCard(encryptedCard);
+    const last4 = decrypted.slice(-4);
+    return `****-****-****-${last4}`;
+  } catch {
+    return '****-****-****-****';
+  }
 }

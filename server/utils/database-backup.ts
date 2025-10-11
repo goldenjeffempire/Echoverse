@@ -26,6 +26,13 @@ export async function createDatabaseBackup(options: BackupOptions = {}): Promise
     throw new Error('DATABASE_URL is not configured');
   }
 
+  // P0 FIX #3: Validate backup encryption key in production/staging
+  if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'staging') {
+    if (!process.env.BACKUP_ENCRYPTION_KEY || process.env.BACKUP_ENCRYPTION_KEY.length < 64) {
+      throw new Error('BACKUP_ENCRYPTION_KEY must be set and at least 64 characters in production/staging');
+    }
+  }
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fileName = `backup-${timestamp}${compress ? '.sql.gz' : '.sql'}`;
   const filePath = path.join(outputDir, fileName);
@@ -58,9 +65,10 @@ export async function createDatabaseBackup(options: BackupOptions = {}): Promise
     });
 
     return filePath;
-  } catch (error: any) {
-    logger.error('Database backup failed', error instanceof Error ? error : undefined, { errorMessage: error?.message || String(error), filePath });
-    throw new Error(`Database backup failed: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Database backup failed', error instanceof Error ? error : undefined, { errorMessage, filePath });
+    throw new Error(`Database backup failed: ${errorMessage}`);
   }
 }
 
@@ -81,9 +89,10 @@ export async function restoreDatabaseBackup(backupFilePath: string): Promise<voi
     await execAsync(restoreCommand);
     
     logger.info('Database restore completed', { backupFilePath });
-  } catch (error: any) {
-    logger.error('Database restore failed', error instanceof Error ? error : undefined, { errorMessage: error?.message || String(error), backupFilePath });
-    throw new Error(`Database restore failed: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Database restore failed', error instanceof Error ? error : undefined, { errorMessage, backupFilePath });
+    throw new Error(`Database restore failed: ${errorMessage}`);
   }
 }
 
@@ -106,8 +115,8 @@ export async function listBackups(backupDir: string = './backups'): Promise<Arra
     );
     
     return backups.sort((a, b) => b.created.getTime() - a.created.getTime());
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       return [];
     }
     throw error;
@@ -130,8 +139,9 @@ export async function deleteOldBackups(
       await fs.unlink(backup.path);
       logger.info('Deleted old backup', { backupPath: backup.path, age: Math.floor((Date.now() - backup.created.getTime()) / (1000 * 60 * 60 * 24)) });
       deletedCount++;
-    } catch (error: any) {
-      logger.error('Failed to delete backup', error instanceof Error ? error : undefined, { backupPath: backup.path, errorMessage: error?.message || String(error) });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to delete backup', error instanceof Error ? error : undefined, { backupPath: backup.path, errorMessage });
     }
   }
 
@@ -149,7 +159,8 @@ export async function scheduledBackup(): Promise<void> {
     
     const retentionDays = parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10);
     await deleteOldBackups('./backups', retentionDays);
-  } catch (error: any) {
-    logger.error('Scheduled backup failed', error instanceof Error ? error : undefined, { errorMessage: error?.message || String(error) });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Scheduled backup failed', error instanceof Error ? error : undefined, { errorMessage });
   }
 }

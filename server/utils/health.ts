@@ -15,6 +15,9 @@ export interface HealthStatus {
   checks: {
     database: HealthCheck;
     memory: HealthCheck;
+    aiProvider?: HealthCheck;
+    redis?: HealthCheck;
+    stripe?: HealthCheck;
     disk?: HealthCheck;
   };
 }
@@ -77,22 +80,141 @@ function checkMemory(): HealthCheck {
 }
 
 /**
+ * PHASE 1: API RELIABILITY - Check AI Provider Health
+ */
+async function checkAIProvider(): Promise<HealthCheck> {
+  try {
+    // Simple health check - verify AI router module is available
+    await import('../ai-providers/router');
+    
+    const ollamaConfigured = !!process.env.OLLAMA_ENDPOINT;
+    const openaiConfigured = !!process.env.OPENAI_API_KEY;
+    
+    return {
+      status: openaiConfigured || ollamaConfigured ? 'pass' : 'warn',
+      details: {
+        ollama: ollamaConfigured ? 'configured' : 'not configured',
+        openai: openaiConfigured ? 'configured' : 'not configured'
+      }
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      details: {
+        error: error instanceof Error ? error.message : 'AI provider check failed'
+      }
+    };
+  }
+}
+
+/**
+ * PHASE 1: API RELIABILITY - Check Redis Health
+ */
+async function checkRedis(): Promise<HealthCheck | undefined> {
+  if (!process.env.REDIS_URL) {
+    return undefined; // Redis not configured
+  }
+  
+  const start = Date.now();
+  try {
+    // TODO: Add Redis client check when Redis is implemented
+    // For now, just return a placeholder
+    return {
+      status: 'warn',
+      responseTime: Date.now() - start,
+      details: {
+        message: 'Redis health check not implemented'
+      }
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      responseTime: Date.now() - start,
+      details: {
+        error: error instanceof Error ? error.message : 'Redis connection failed'
+      }
+    };
+  }
+}
+
+/**
+ * PHASE 1: API RELIABILITY - Check Stripe Health
+ */
+async function checkStripe(): Promise<HealthCheck> {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return {
+      status: 'warn',
+      details: { message: 'Stripe not configured' }
+    };
+  }
+  
+  const start = Date.now();
+  try {
+    const Stripe = (await import('stripe')).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2024-06-20' as any,
+      typescript: true,
+    });
+    
+    // Simple API call to verify connectivity
+    await stripe.balance.retrieve();
+    
+    return {
+      status: 'pass',
+      responseTime: Date.now() - start,
+      details: {
+        connected: true,
+        latency: `${Date.now() - start}ms`
+      }
+    };
+  } catch (error) {
+    return {
+      status: 'fail',
+      responseTime: Date.now() - start,
+      details: {
+        connected: false,
+        error: error instanceof Error ? error.message : 'Stripe API error'
+      }
+    };
+  }
+}
+
+/**
  * Get overall health status
  */
 export async function getHealthStatus(): Promise<HealthStatus> {
-  const [database, memory] = await Promise.all([
+  const [database, memory, aiProvider, redis, stripe] = await Promise.all([
     checkDatabase(),
-    Promise.resolve(checkMemory())
+    Promise.resolve(checkMemory()),
+    checkAIProvider(),
+    checkRedis(),
+    checkStripe()
   ]);
   
-  const checks = { database, memory };
+  const checks: any = { database, memory };
+  if (aiProvider) checks.aiProvider = aiProvider;
+  if (redis) checks.redis = redis;
+  if (stripe) checks.stripe = stripe;
   
   // Determine overall status
   let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+  
+  // Critical failures (database is critical)
   if (database.status === 'fail') {
     status = 'unhealthy';
-  } else if (database.status === 'warn' || memory.status === 'warn') {
+  }
+  // Degraded if AI provider fails (but fallback works) or other warnings
+  else if (
+    database.status === 'warn' || 
+    memory.status === 'warn' || 
+    aiProvider?.status === 'warn' ||
+    stripe?.status === 'warn'
+  ) {
     status = 'degraded';
+  }
+  // Unhealthy if AI provider completely fails or Stripe fails
+  else if (aiProvider?.status === 'fail' || stripe?.status === 'fail') {
+    status = 'degraded'; // Degraded not unhealthy, since these aren't critical
   }
   
   return {
@@ -171,25 +293,25 @@ export function setupGracefulShutdown(server: any): void {
     if (isShuttingDown) return;
     isShuttingDown = true;
     
-    console.log(`${signal} received. Starting graceful shutdown...`);
+    // Graceful shutdown initiated
     
     // Stop accepting new connections
     server.close(async () => {
-      console.log('Server closed. Cleaning up resources...');
+      // Server closed, cleaning up resources
       
       try {
         // Add any cleanup logic here (close DB connections, etc.)
-        console.log('Cleanup completed successfully');
+        // Cleanup completed successfully
         process.exit(0);
       } catch (error) {
-        console.error('Error during cleanup:', error);
+        // Error during cleanup
         process.exit(1);
       }
     });
     
     // Force shutdown after timeout
     setTimeout(() => {
-      console.error('Forced shutdown after timeout');
+      // Forced shutdown after timeout
       process.exit(1);
     }, 30000); // 30 seconds
   };

@@ -126,6 +126,106 @@ export function encodeHtmlEntities(text: string): string {
 }
 
 /**
+ * Context-Aware Output Encoding
+ * 
+ * Different contexts require different encoding strategies to prevent XSS
+ */
+
+/**
+ * Encode for HTML attribute context
+ * Use when inserting into HTML attributes like <div title="USER_INPUT">
+ */
+export function encodeHtmlAttribute(text: string): string {
+  if (!text) return '';
+  
+  return text.replace(/[&<>"'`=]/g, (char) => {
+    const entityMap: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#x27;',
+      '`': '&#x60;',
+      '=': '&#x3D;',
+    };
+    return entityMap[char] || char;
+  });
+}
+
+/**
+ * Encode for JavaScript string context
+ * Use when inserting into JS strings like var x = "USER_INPUT"
+ */
+export function encodeJavaScriptString(text: string): string {
+  if (!text) return '';
+  
+  return text.replace(/[\\'"<>/\r\n\t\x00-\x1f\x7f-\x9f]/g, (char) => {
+    // Escape special JavaScript characters
+    const escapeMap: Record<string, string> = {
+      '\\': '\\\\',
+      "'": "\\'",
+      '"': '\\"',
+      '<': '\\x3C',
+      '>': '\\x3E',
+      '/': '\\/',
+      '\r': '\\r',
+      '\n': '\\n',
+      '\t': '\\t',
+    };
+    
+    if (escapeMap[char]) {
+      return escapeMap[char];
+    }
+    
+    // Unicode escape for control characters
+    const code = char.charCodeAt(0);
+    if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) {
+      return '\\x' + code.toString(16).padStart(2, '0');
+    }
+    
+    return char;
+  });
+}
+
+/**
+ * Encode for URL parameter context
+ * Use when inserting into URLs like /search?q=USER_INPUT
+ */
+export function encodeUrlParameter(text: string): string {
+  if (!text) return '';
+  
+  return encodeURIComponent(text);
+}
+
+/**
+ * Encode for CSS context
+ * Use when inserting into CSS like .class { color: USER_INPUT; }
+ */
+export function encodeCssValue(text: string): string {
+  if (!text) return '';
+  
+  // CSS allows very limited characters safely
+  // Escape anything that's not alphanumeric or safe punctuation
+  return text.replace(/[^a-zA-Z0-9\s,.\-_]/g, (char) => {
+    const code = char.charCodeAt(0);
+    return '\\' + code.toString(16).padStart(6, '0');
+  });
+}
+
+/**
+ * Encode for JSON context
+ * Use when embedding data in JSON responses
+ */
+export function encodeJsonValue(value: any): string {
+  try {
+    return JSON.stringify(value);
+  } catch (error) {
+    // Fallback for circular references or special values
+    return JSON.stringify(String(value));
+  }
+}
+
+/**
  * Sanitize event handler attributes from strings
  */
 export function sanitizeEventHandlers(text: string): string {
@@ -143,6 +243,49 @@ export function sanitizeEventHandlers(text: string): string {
 }
 
 /**
+ * Sanitize search query input to prevent SQL injection and XSS
+ * Safe for use in database queries and HTML output
+ */
+export function sanitizeSearchInput(input: string | undefined | null): string {
+  if (!input || typeof input !== 'string') return '';
+  
+  // Trim and limit length
+  let sanitized = input.trim().substring(0, 500);
+  
+  // Remove SQL injection attempts
+  const sqlPatterns = [
+    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/gi,
+    /(--|;|\/\*|\*\/)/g,  // SQL comments and statement terminators
+    /(\bOR\b.*=.*)/gi,    // OR-based injection
+    /(\bAND\b.*=.*)/gi,   // AND-based injection
+    /(\bunion\b.*select)/gi, // UNION-based injection
+  ];
+  
+  for (const pattern of sqlPatterns) {
+    sanitized = sanitized.replace(pattern, '');
+  }
+  
+  // Remove XSS attempts
+  sanitized = sanitized
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '') // Remove event handlers
+    .replace(/<\s*\/?\s*(script|iframe|object|embed|applet|meta|link)\b[^>]*>/gi, '');
+  
+  // Encode remaining HTML special characters for display safety
+  sanitized = sanitized
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+  
+  return sanitized;
+}
+
+/**
  * Generate a cryptographically secure random token
  */
 export function generateSecureToken(length: number = 32): string {
@@ -151,9 +294,49 @@ export function generateSecureToken(length: number = 32): string {
 
 /**
  * Generate a CSRF token for double-submit cookie pattern
+ * DEPRECATED: Use generateBoundCsrfToken for cryptographic binding
  */
 export function generateCsrfToken(): string {
   return generateSecureToken(32);
+}
+
+/**
+ * Generate a cryptographically bound CSRF token
+ * Binds token to session using HMAC for enhanced security
+ * 
+ * Format: randomToken + '.' + HMAC(randomToken + sessionId, secret)
+ * This prevents token theft/reuse across sessions
+ */
+export function generateBoundCsrfToken(sessionId: string, secret: string): string {
+  const randomToken = generateSecureToken(32);
+  const binding = generateHmacSignature(`${randomToken}:${sessionId}`, secret);
+  return `${randomToken}.${binding}`;
+}
+
+/**
+ * Verify a cryptographically bound CSRF token
+ * Validates both the token format and its binding to the session
+ */
+export function verifyBoundCsrfToken(
+  token: string,
+  sessionId: string,
+  secret: string
+): boolean {
+  if (!token || !sessionId || !secret) {
+    return false;
+  }
+  
+  // Token format: randomToken.hmac
+  const parts = token.split('.');
+  if (parts.length !== 2) {
+    return false;
+  }
+  
+  const [randomToken, providedBinding] = parts;
+  
+  // Verify the binding
+  const expectedBinding = generateHmacSignature(`${randomToken}:${sessionId}`, secret);
+  return timingSafeStringCompare(expectedBinding, providedBinding);
 }
 
 /**
@@ -193,8 +376,8 @@ export function validatePasswordStrength(password: string): {
     return { valid: false, errors };
   }
   
-  if (password.length < 8) {
-    errors.push('Password must be at least 8 characters long');
+  if (password.length < 12) {
+    errors.push('Password must be at least 12 characters long');
   }
   
   if (password.length > 128) {

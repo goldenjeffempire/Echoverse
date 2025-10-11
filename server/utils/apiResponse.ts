@@ -9,7 +9,7 @@ export interface PaginationMeta {
   hasPrevPage: boolean;
 }
 
-export interface ApiSuccessResponse<T = any> {
+export interface ApiSuccessResponse<T = unknown> {
   success: true;
   data: T;
   message?: string;
@@ -21,11 +21,11 @@ export interface ApiErrorResponse {
   error: {
     message: string;
     code?: string;
-    details?: any;
+    details?: unknown;
   };
 }
 
-export type ApiResponse<T = any> = ApiSuccessResponse<T> | ApiErrorResponse;
+export type ApiResponse<T = unknown> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 export function successResponse<T>(
   res: Response, 
@@ -87,7 +87,7 @@ export function errorResponse(
   message: string,
   statusCode: number = 500,
   code?: string,
-  details?: any
+  details?: unknown
 ): void {
   const response: ApiErrorResponse = {
     success: false,
@@ -103,7 +103,7 @@ export function errorResponse(
 
 export function validationErrorResponse(
   res: Response,
-  errors: any[]
+  errors: Array<Record<string, unknown>>
 ): void {
   errorResponse(res, 'Validation failed', 400, 'VALIDATION_ERROR', errors);
 }

@@ -7,10 +7,10 @@ export interface AuditLogEntry {
   action: string;
   resource: string;
   resourceId?: string;
-  changes?: any;
+  changes?: unknown;
   ipAddress?: string;
   userAgent?: string;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
@@ -39,7 +39,7 @@ export async function createAuditLog(entry: AuditLogEntry): Promise<void> {
 export async function auditUserAction(
   userId: string,
   action: 'login' | 'logout' | 'password_change' | 'email_change' | 'profile_update' | '2fa_enabled' | '2fa_disabled',
-  metadata?: any,
+  metadata?: unknown,
   ipAddress?: string,
   userAgent?: string
 ): Promise<void> {
@@ -59,8 +59,8 @@ export async function auditResourceChange(
   action: 'create' | 'update' | 'delete',
   resource: string,
   resourceId: string,
-  changes?: { before?: any; after?: any },
-  metadata?: any
+  changes?: { before?: unknown; after?: unknown },
+  metadata?: unknown
 ): Promise<void> {
   await createAuditLog({
     userId,
@@ -76,7 +76,7 @@ export async function auditPaymentAction(
   userId: string | undefined,
   action: 'payment_initiated' | 'payment_succeeded' | 'payment_failed' | 'refund_initiated' | 'refund_completed',
   resourceId: string,
-  metadata?: any
+  metadata?: unknown
 ): Promise<void> {
   await createAuditLog({
     userId,

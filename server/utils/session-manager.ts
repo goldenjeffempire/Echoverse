@@ -10,6 +10,7 @@ let cleanupOldPromise: Promise<number> | null = null;
 /**
  * Clean up expired sessions from the database
  * Uses promise-based mutex to prevent race conditions from concurrent executions
+ * CRITICAL FIX #10: Now uses atomic transaction for safe cleanup
  */
 export async function cleanupExpiredSessions(): Promise<number> {
   // If cleanup is already running, await the existing promise
@@ -21,14 +22,17 @@ export async function cleanupExpiredSessions(): Promise<number> {
   // Create new cleanup promise and store it
   cleanupExpiredPromise = (async () => {
     try {
-      const result = await db
-        .delete(sessions)
-        .where(lte(sessions.expiresAt, new Date()))
-        .returning({ id: sessions.id });
+      // CRITICAL FIX: Wrap deletion in atomic transaction
+      const result = await db.transaction(async (tx) => {
+        return await tx
+          .delete(sessions)
+          .where(lte(sessions.expiresAt, new Date()))
+          .returning({ id: sessions.id });
+      });
       
       const count = result.length;
       if (count > 0) {
-        logger.info('Cleaned up expired sessions', { count });
+        logger.info('Cleaned up expired sessions atomically', { count });
       }
       return count;
     } catch (error) {
@@ -46,6 +50,7 @@ export async function cleanupExpiredSessions(): Promise<number> {
 /**
  * Clean up old sessions (keep only most recent N per user)
  * Uses promise-based mutex to prevent race conditions from concurrent executions
+ * CRITICAL FIX #10: Now uses atomic transaction for safe cleanup
  */
 export async function cleanupOldSessions(keepPerUser: number = 5): Promise<number> {
   // If cleanup is already running, await the existing promise
@@ -59,30 +64,36 @@ export async function cleanupOldSessions(keepPerUser: number = 5): Promise<numbe
     try {
       const { inArray } = await import('drizzle-orm');
       
-      const allSessions = await db.query.sessions.findMany({
-        orderBy: (sessions, { desc }) => [desc(sessions.lastActivityAt)]
+      // CRITICAL FIX: Wrap entire cleanup in atomic transaction
+      const deletedCount = await db.transaction(async (tx) => {
+        const allSessions = await tx.query.sessions.findMany({
+          orderBy: (sessions, { desc }) => [desc(sessions.lastActivityAt)]
+        });
+        
+        const sessionsToDelete: string[] = [];
+        const userSessions = new Map<string, number>();
+        
+        for (const session of allSessions) {
+          const count = userSessions.get(session.userId) || 0;
+          if (count >= keepPerUser) {
+            sessionsToDelete.push(session.id);
+          } else {
+            userSessions.set(session.userId, count + 1);
+          }
+        }
+        
+        if (sessionsToDelete.length > 0) {
+          await tx.delete(sessions).where(
+            inArray(sessions.id, sessionsToDelete)
+          );
+          logger.info('Cleaned up old sessions atomically', { count: sessionsToDelete.length });
+          return sessionsToDelete.length;
+        }
+        
+        return 0;
       });
       
-      const sessionsToDelete: string[] = [];
-      const userSessions = new Map<string, number>();
-      
-      for (const session of allSessions) {
-        const count = userSessions.get(session.userId) || 0;
-        if (count >= keepPerUser) {
-          sessionsToDelete.push(session.id);
-        } else {
-          userSessions.set(session.userId, count + 1);
-        }
-      }
-      
-      if (sessionsToDelete.length > 0) {
-        await db.delete(sessions).where(
-          inArray(sessions.id, sessionsToDelete)
-        );
-        logger.info('Cleaned up old sessions', { count: sessionsToDelete.length });
-      }
-      
-      return sessionsToDelete.length;
+      return deletedCount;
     } catch (error) {
       logger.error('Failed to cleanup old sessions', error instanceof Error ? error : undefined);
       return 0;
