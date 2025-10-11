@@ -12,7 +12,7 @@
 import { db } from "./db";
 import { loginAttempts, accountLockouts, passwordResetTokens, users, passwordHistory, sessions } from "@shared/schema";
 import { eq, and, gte, desc, sql, lte } from "drizzle-orm";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, createHmac } from "crypto";
 import type { Request } from "express";
 import bcrypt from "bcrypt";
 import { 
@@ -20,10 +20,11 @@ import {
   detectUserAgentChange, 
   generateDeviceFingerprint as genFingerprint 
 } from "./utils/security";
+import { logger } from "./logger";
 
 // Configuration constants
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MINUTES = 30;
+const LOCKOUT_DURATION_MINUTES = 15; // PHASE 1: Set to 15 minutes as per security requirements
 const PROGRESSIVE_LOCKOUT_THRESHOLD = 10; // Second threshold for 24hr lockout
 const EXTENDED_LOCKOUT_DURATION_HOURS = 24;
 const PASSWORD_RESET_TOKEN_EXPIRY_HOURS = 1;
@@ -234,20 +235,25 @@ export function generateResetToken(): string {
 
 /**
  * Create a password reset token
- * SECURITY: Token is hashed before storage to prevent plaintext exposure
+ * SECURITY: Token is HMAC'd with server secret for enhanced security
  */
 export async function createPasswordResetToken(
   userId: string,
   ipAddress: string,
-  userAgent: string
+  userAgent: string,
+  deviceFingerprint?: string
 ): Promise<string> {
   const token = generateResetToken();
-  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const hmacSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET!;
+  const tokenHmac = createHmac('sha256', hmacSecret)
+    .update(token + userId + (deviceFingerprint || ''))
+    .digest('hex');
+  
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
   
   await db.insert(passwordResetTokens).values({
     userId,
-    token: tokenHash, // Store hashed token
+    token: tokenHmac, // Store HMAC'd token bound to user and device
     expiresAt,
     ipAddress,
     userAgent,
@@ -259,31 +265,90 @@ export async function createPasswordResetToken(
 
 /**
  * Validate and use a password reset token
- * SECURITY: Hash incoming token to compare with stored hash
+ * CRITICAL FIX #4: Validate IP and User-Agent to prevent token theft
+ * P0 FIX #18: Atomic check-and-mark-as-used to enforce single-use (prevents race conditions)
+ * SECURITY: Hash incoming token to compare with stored hash, validate context
  */
 export async function validatePasswordResetToken(
-  token: string
+  token: string,
+  ipAddress?: string,
+  userAgent?: string
 ): Promise<{ valid: boolean; userId?: string; error?: string }> {
   const tokenHash = createHash('sha256').update(token).digest('hex');
   
-  const resetToken = await db
-    .select()
-    .from(passwordResetTokens)
-    .where(eq(passwordResetTokens.token, tokenHash))
-    .limit(1);
+  // P0 FIX #18: Use atomic UPDATE with WHERE clause to check and mark as used in one query
+  // This prevents race conditions where multiple requests could validate the same token
+  const result = await db
+    .update(passwordResetTokens)
+    .set({ 
+      used: true, 
+      usedAt: new Date() 
+    })
+    .where(
+      and(
+        eq(passwordResetTokens.token, tokenHash),
+        eq(passwordResetTokens.used, false), // Only update if not already used
+        gte(passwordResetTokens.expiresAt, new Date()) // Only update if not expired
+      )
+    )
+    .returning();
   
-  if (resetToken.length === 0) {
-    return { valid: false, error: 'Invalid token' };
+  if (result.length === 0) {
+    // Token doesn't exist, already used, or expired
+    const checkToken = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, tokenHash))
+      .limit(1);
+    
+    if (checkToken.length === 0) {
+      return { valid: false, error: 'Invalid token' };
+    }
+    
+    if (checkToken[0].used) {
+      return { valid: false, error: 'Token already used' };
+    }
+    
+    if (new Date() > checkToken[0].expiresAt) {
+      return { valid: false, error: 'Token expired' };
+    }
+    
+    return { valid: false, error: 'Token validation failed' };
   }
   
-  const tokenData = resetToken[0];
+  const tokenData = result[0];
   
-  if (tokenData.used) {
-    return { valid: false, error: 'Token already used' };
+  // CRITICAL FIX #4: Validate IP and User-Agent match (security against token theft)
+  if (ipAddress && tokenData.ipAddress && ipAddress !== tokenData.ipAddress) {
+    logger.warn('Password reset token used from different IP', {
+      userId: tokenData.userId,
+      storedIp: tokenData.ipAddress,
+      requestIp: ipAddress
+    });
+    
+    // Rollback the "used" flag since validation failed
+    await db
+      .update(passwordResetTokens)
+      .set({ used: false, usedAt: null })
+      .where(eq(passwordResetTokens.token, tokenHash));
+    
+    return { valid: false, error: 'Token validation failed - security check' };
   }
   
-  if (new Date() > tokenData.expiresAt) {
-    return { valid: false, error: 'Token expired' };
+  if (userAgent && tokenData.userAgent && userAgent !== tokenData.userAgent) {
+    logger.warn('Password reset token used from different User-Agent', {
+      userId: tokenData.userId,
+      storedUA: tokenData.userAgent,
+      requestUA: userAgent
+    });
+    
+    // Rollback the "used" flag since validation failed
+    await db
+      .update(passwordResetTokens)
+      .set({ used: false, usedAt: null })
+      .where(eq(passwordResetTokens.token, tokenHash));
+    
+    return { valid: false, error: 'Token validation failed - security check' };
   }
   
   return { valid: true, userId: tokenData.userId };

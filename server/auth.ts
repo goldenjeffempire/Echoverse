@@ -2,11 +2,15 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { type Request, type Response, type NextFunction } from "express";
 import { storage } from "./storage";
-import { insertUserSchema, loginSchema, type User, type Session } from "@shared/schema";
+import { insertUserSchema, loginSchema, type User, type Session, passwordHistory } from "@shared/schema";
 import { z } from "zod";
 import { randomUUID, createHash } from "crypto";
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
+import { eq, desc } from "drizzle-orm";
+import { db } from "./db";
+import { logger } from "./logger";
+import { TIME_CONSTANTS, SECURITY } from "@shared/constants";
 
 if (!process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET environment variable is required');
@@ -14,16 +18,22 @@ if (!process.env.SESSION_SECRET) {
 
 let JWT_SECRET: string;
 if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
   console.warn('WARNING: JWT_SECRET not set. Using SESSION_SECRET as fallback. This is NOT recommended for production!');
   console.warn('Please set a separate JWT_SECRET environment variable for enhanced security.');
   JWT_SECRET = process.env.SESSION_SECRET;
 } else {
   if (process.env.JWT_SECRET === process.env.SESSION_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET must be different from SESSION_SECRET in production for security');
+    }
     console.warn('WARNING: JWT_SECRET is the same as SESSION_SECRET. For production, use different secrets.');
   }
   JWT_SECRET = process.env.JWT_SECRET;
 }
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS = SECURITY.BCRYPT_ROUNDS;
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
@@ -49,7 +59,7 @@ const MAX_SESSIONS_PER_USER = 5; // Configurable limit
 
 export async function createSession(userId: string): Promise<{ sessionId: string; accessToken: string; refreshToken: string }> {
   const sessionId = randomUUID();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  const expiresAt = new Date(Date.now() + TIME_CONSTANTS.ONE_DAY);
   
   // Generate refresh token with random component
   const refreshTokenPayload = { userId, sessionId, type: "refresh", nonce: randomUUID() };
@@ -78,33 +88,54 @@ export async function refreshSession(refreshToken: string): Promise<{ accessToke
       return null;
     }
     
-    // Verify session exists and is valid
-    const session = await storage.getSession(decoded.sessionId);
-    if (!session || new Date() > session.expiresAt) {
+    // SECURITY: Acquire lock to prevent concurrent refresh attacks
+    const { acquireRefreshLock, releaseRefreshLock } = await import('./utils/refresh-token-lock');
+    const lockAcquired = await acquireRefreshLock(decoded.sessionId);
+    
+    if (!lockAcquired) {
+      // Concurrent refresh attempt detected - potential attack
+      logger.warn('[Security] Concurrent refresh token attempt blocked', {
+        sessionId: decoded.sessionId.substring(0, 8) + '...',
+        userId: decoded.userId
+      });
+      
+      // Invalidate session as a security precaution
+      await invalidateSession(decoded.sessionId);
       return null;
     }
     
-    // Verify refresh token matches stored hash (prevents reuse of old tokens)
-    const tokenHash = hashRefreshToken(refreshToken);
-    if (session.refreshTokenHash !== tokenHash) {
-      // Token has been rotated/invalidated - reject
-      return null;
+    try {
+      // Verify session exists and is valid
+      const session = await storage.getSession(decoded.sessionId);
+      if (!session || new Date() > session.expiresAt) {
+        return null;
+      }
+      
+      // Verify refresh token matches stored hash (prevents reuse of old tokens)
+      const tokenHash = hashRefreshToken(refreshToken);
+      if (session.refreshTokenHash !== tokenHash) {
+        // Token has been rotated/invalidated - reject
+        return null;
+      }
+      
+      // Generate new refresh token with new nonce
+      const newRefreshTokenPayload = { userId: decoded.userId, sessionId: decoded.sessionId, type: "refresh", nonce: randomUUID() };
+      const newRefreshToken = jwt.sign(newRefreshTokenPayload, JWT_SECRET, { expiresIn: "7d" });
+      
+      // Update session with new refresh token hash (invalidates old token)
+      await storage.updateSession(decoded.sessionId, {
+        refreshTokenHash: hashRefreshToken(newRefreshToken),
+        updatedAt: new Date()
+      });
+      
+      // Generate new access token
+      const newAccessToken = jwt.sign({ userId: decoded.userId, sessionId: decoded.sessionId }, JWT_SECRET, { expiresIn: "15m" });
+      
+      return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+    } finally {
+      // Always release the lock
+      releaseRefreshLock(decoded.sessionId);
     }
-    
-    // Generate new refresh token with new nonce
-    const newRefreshTokenPayload = { userId: decoded.userId, sessionId: decoded.sessionId, type: "refresh", nonce: randomUUID() };
-    const newRefreshToken = jwt.sign(newRefreshTokenPayload, JWT_SECRET, { expiresIn: "7d" });
-    
-    // Update session with new refresh token hash (invalidates old token)
-    await storage.updateSession(decoded.sessionId, {
-      refreshTokenHash: hashRefreshToken(newRefreshToken),
-      updatedAt: new Date()
-    });
-    
-    // Generate new access token
-    const newAccessToken = jwt.sign({ userId: decoded.userId, sessionId: decoded.sessionId }, JWT_SECRET, { expiresIn: "15m" });
-    
-    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   } catch {
     return null;
   }
@@ -160,13 +191,13 @@ export async function verifySessionAndUser(token: string, requestIp?: string, re
     // Enable only in high-security environments where user experience trade-offs are acceptable
     if (SESSION_SECURITY_CONFIG.enforceStrictIpBinding && requestIp && session.ipAddress && session.ipAddress !== requestIp) {
       if (SESSION_SECURITY_CONFIG.logSecurityWarnings) {
-        console.warn(`[Security] Session IP mismatch for session ${decoded.sessionId}: stored=${session.ipAddress}, current=${requestIp}`);
+        logger.warn(`[Security] Session IP mismatch for session ${decoded.sessionId}: stored=${session.ipAddress}, current=${requestIp}`);
       }
       await invalidateSession(decoded.sessionId);
       return null;
     } else if (SESSION_SECURITY_CONFIG.logSecurityWarnings && requestIp && session.ipAddress && session.ipAddress !== requestIp) {
       // Log warning but allow the request (monitoring only)
-      console.warn(`[Security Monitor] Session IP changed for session ${decoded.sessionId}: ${session.ipAddress} → ${requestIp}`);
+      logger.warn(`[Security Monitor] Session IP changed for session ${decoded.sessionId}: ${session.ipAddress} → ${requestIp}`);
     }
     
     // SECURITY: Optional User-Agent verification
@@ -174,13 +205,13 @@ export async function verifySessionAndUser(token: string, requestIp?: string, re
     // Enable only in high-security environments
     if (SESSION_SECURITY_CONFIG.enforceStrictUaBinding && requestUserAgent && session.userAgent && session.userAgent !== requestUserAgent) {
       if (SESSION_SECURITY_CONFIG.logSecurityWarnings) {
-        console.warn(`[Security] Session UA mismatch for session ${decoded.sessionId}`);
+        logger.warn(`[Security] Session UA mismatch for session ${decoded.sessionId}`);
       }
       await invalidateSession(decoded.sessionId);
       return null;
     } else if (SESSION_SECURITY_CONFIG.logSecurityWarnings && requestUserAgent && session.userAgent && session.userAgent !== requestUserAgent) {
       // Log warning but allow the request (monitoring only)
-      console.warn(`[Security Monitor] Session UA changed for session ${decoded.sessionId}`);
+      logger.warn(`[Security Monitor] Session UA changed for session ${decoded.sessionId}`);
     }
     
     const user = await storage.getUser(decoded.userId);
@@ -212,7 +243,7 @@ export async function authenticateToken(
   const realIp = req.headers['x-real-ip'];
   const clientIp = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() :
                    typeof realIp === 'string' ? realIp :
-                   req.socket.remoteAddress) || 'unknown';
+                   req.socket.remoteAddress) ?? 'unknown';
   const clientUserAgent = req.headers['user-agent'];
 
   const result = await verifySessionAndUser(token, clientIp, clientUserAgent);
@@ -240,7 +271,7 @@ export async function optionalAuth(
     const realIp = req.headers['x-real-ip'];
     const clientIp = (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() :
                      typeof realIp === 'string' ? realIp :
-                     req.socket.remoteAddress) || 'unknown';
+                     req.socket.remoteAddress) ?? 'unknown';
     const clientUserAgent = req.headers['user-agent'];
     
     const result = await verifySessionAndUser(token, clientIp, clientUserAgent);
@@ -288,6 +319,19 @@ export async function register(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // SECURITY: Check password against HaveIBeenPwned breach database
+    const { validatePasswordSecurity } = await import('./services/hibp');
+    const passwordValidation = await validatePasswordSecurity(validatedData.password);
+    
+    if (!passwordValidation.valid) {
+      res.status(400).json({ 
+        message: "Password does not meet security requirements",
+        errors: passwordValidation.errors,
+        warnings: passwordValidation.warnings
+      });
+      return;
+    }
+
     // Hash password
     const hashedPassword = await hashPassword(validatedData.password);
 
@@ -301,7 +345,7 @@ export async function register(req: Request, res: Response): Promise<void> {
     if (process.env.ENABLE_EMAIL_VERIFICATION !== 'false') {
       const { createEmailVerificationToken } = await import('./services/email-verification');
       createEmailVerificationToken(user.id, user.email, req.ip, req.get('user-agent')).catch(error => {
-        console.error('Failed to send verification email:', error);
+        logger.error('Failed to send verification email', error instanceof Error ? error : new Error(String(error)));
       });
     }
 
@@ -325,7 +369,7 @@ export async function register(req: Request, res: Response): Promise<void> {
         errors: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
       });
     } else {
-      console.error("Registration error:", error);
+      logger.error("Registration error", error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -393,7 +437,7 @@ export async function login(req: Request, res: Response): Promise<void> {
           if (backupResult.valid) {
             // Update user with remaining backup codes
             await storage.updateUser(user.id, {
-              twoFactorBackupCodes: backupResult.remainingCodes || null
+              twoFactorBackupCodes: backupResult.remainingCodes ?? null
             });
           } else {
             await recordLoginAttempt(username, clientInfo.ipAddress, clientInfo.userAgent, false, 'Invalid 2FA token');
@@ -437,7 +481,7 @@ export async function login(req: Request, res: Response): Promise<void> {
         errors: error.errors.map(e => ({ field: e.path.join('.'), message: e.message }))
       });
     } else {
-      console.error("Login error:", error);
+      logger.error("Login error", error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ message: "Internal server error" });
     }
   }
@@ -446,7 +490,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 // Enhanced session creation with client tracking
 async function createSessionWithTracking(userId: string, clientInfo: ReturnType<typeof import('./auth-enhanced')['getClientInfo']>): Promise<{ sessionId: string; accessToken: string; refreshToken: string }> {
   const sessionId = randomUUID();
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  const expiresAt = new Date(Date.now() + TIME_CONSTANTS.ONE_DAY);
   
   // Generate refresh token with random component
   const refreshTokenPayload = { userId, sessionId, type: "refresh", nonce: randomUUID() };
@@ -586,4 +630,64 @@ export async function verifyBackupCode(code: string, encryptedCodesJson: string)
 export async function hashBackupCodes(codes: string[]): Promise<string> {
   // Redirect to encrypted version
   return encryptBackupCodes(codes);
+}
+
+// ==================== PASSWORD HISTORY MANAGEMENT ====================
+// Migrated from auth-enhanced.ts
+
+const PASSWORD_HISTORY_COUNT = 12; // Industry standard: keep last 12 passwords
+
+/**
+ * Add password to user's password history
+ * Automatically maintains only the last N passwords
+ */
+export async function addPasswordToHistory(
+  userId: string,
+  passwordHash: string
+): Promise<void> {
+  await db.insert(passwordHistory).values({
+    userId,
+    passwordHash,
+    createdAt: new Date()
+  });
+  
+  // Clean up old password history (keep only last N passwords)
+  const allHistory = await db
+    .select()
+    .from(passwordHistory)
+    .where(eq(passwordHistory.userId, userId))
+    .orderBy(desc(passwordHistory.createdAt));
+  
+  if (allHistory.length > PASSWORD_HISTORY_COUNT) {
+    const toDelete = allHistory.slice(PASSWORD_HISTORY_COUNT);
+    for (const old of toDelete) {
+      await db.delete(passwordHistory).where(eq(passwordHistory.id, old.id));
+    }
+  }
+}
+
+/**
+ * Check if password was used recently (password reuse prevention)
+ * Returns true if password matches any in user's password history
+ */
+export async function isPasswordReused(
+  userId: string,
+  newPassword: string
+): Promise<boolean> {
+  const history = await db
+    .select()
+    .from(passwordHistory)
+    .where(eq(passwordHistory.userId, userId))
+    .orderBy(desc(passwordHistory.createdAt))
+    .limit(PASSWORD_HISTORY_COUNT);
+  
+  // Check if new password matches any in history
+  for (const record of history) {
+    const matches = await bcrypt.compare(newPassword, record.passwordHash);
+    if (matches) {
+      return true;
+    }
+  }
+  
+  return false;
 }

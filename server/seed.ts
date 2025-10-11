@@ -4,10 +4,10 @@ import { hashPassword } from './auth';
 import { randomUUID } from 'crypto';
 
 async function seed() {
-  console.log('Starting database seeding...');
+  // Starting database seeding
   
   try {
-    console.log('Creating demo users...');
+    // Creating demo users
     const hashedPassword = await hashPassword('password123');
     
     const demoUsers = await db.insert(users).values([
@@ -37,13 +37,13 @@ async function seed() {
       },
     ] as any).returning();
     
-    console.log(`Created ${demoUsers.length} demo users`);
+    // Demo users created
     
     const adminId = demoUsers[0].id;
     const johnId = demoUsers[1].id;
     const janeId = demoUsers[2].id;
     
-    console.log('Creating demo websites...');
+    // Creating demo websites
     const demoWebsites = await db.insert(websites).values([
       {
         id: randomUUID(),
@@ -95,9 +95,9 @@ async function seed() {
       },
     ] as any).returning();
     
-    console.log(`Created ${demoWebsites.length} demo websites`);
+    // Demo websites created
     
-    console.log('Creating demo products...');
+    // Creating demo products
     const demoProducts = await db.insert(products).values([
       {
         id: randomUUID(),
@@ -137,9 +137,9 @@ async function seed() {
       },
     ] as any).returning();
     
-    console.log(`Created ${demoProducts.length} demo products`);
+    // Demo products created
     
-    console.log('Creating demo blog posts...');
+    // Creating demo blog posts
     const demoPosts = await db.insert(posts).values([
       {
         id: randomUUID(),
@@ -181,9 +181,9 @@ async function seed() {
       },
     ]).returning();
     
-    console.log(`Created ${demoPosts.length} demo posts`);
+    // Demo posts created
     
-    console.log('Creating demo communities...');
+    // Creating demo communities
     const demoCommunities = await db.insert(communities).values([
       {
         id: randomUUID(),
@@ -213,9 +213,9 @@ async function seed() {
       },
     ]).returning();
     
-    console.log(`Created ${demoCommunities.length} demo communities`);
+    // Demo communities created
     
-    console.log('Creating demo campaigns...');
+    // Creating demo campaigns
     const demoCampaigns = await db.insert(campaigns).values([
       {
         id: randomUUID(),
@@ -255,9 +255,9 @@ async function seed() {
       },
     ] as any).returning();
     
-    console.log(`Created ${demoCampaigns.length} demo campaigns`);
+    // Demo campaigns created
     
-    console.log('Creating demo plugins...');
+    // Creating demo plugins
     const demoPlugins = await db.insert(plugins).values([
       {
         id: randomUUID(),
@@ -321,26 +321,26 @@ async function seed() {
       },
     ] as any).returning();
     
-    console.log(`Created ${demoPlugins.length} demo plugins`);
+    // Demo plugins created
     
-    console.log('\n✅ Database seeding completed successfully!');
-    console.log('\nDemo credentials:');
-    console.log('Admin: admin@echoverse.com / password123');
-    console.log('User 1: john@example.com / password123');
-    console.log('User 2: jane@example.com / password123');
+    // Database seeding completed successfully
+    // Demo credentials available:
+    // Admin: admin@echoverse.com / password123
+    // User 1: john@example.com / password123
+    // User 2: jane@example.com / password123
     
   } catch (error) {
-    console.error('❌ Error seeding database:', error);
+    // Error seeding database
     throw error;
   }
 }
 
 seed()
   .then(() => {
-    console.log('Exiting...');
+    // Seeding complete, exiting
     process.exit(0);
   })
   .catch((error) => {
-    console.error('Seed failed:', error);
+    // Seed failed
     process.exit(1);
   });

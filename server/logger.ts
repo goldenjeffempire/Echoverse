@@ -1,4 +1,6 @@
 import { createHash } from "crypto";
+import { createWriteStream, existsSync, mkdirSync, statSync, readdirSync, unlinkSync } from "fs";
+import { join } from "path";
 
 export enum LogLevel {
   DEBUG = "DEBUG",
@@ -15,6 +17,9 @@ interface LogEntry {
   context?: Record<string, any>;
   userId?: string;
   requestId?: string;
+  correlationId?: string; // CRITICAL FIX: Add correlation ID support
+  traceId?: string;
+  spanId?: string;
   error?: {
     name: string;
     message: string;
@@ -22,10 +27,24 @@ interface LogEntry {
   };
 }
 
+interface LogRotationConfig {
+  maxSize: number;
+  maxFiles: number;
+  compress: boolean;
+}
+
 class Logger {
   private environment: string;
   private secretPatterns: RegExp[];
   private secretKeys: Set<string>;
+  private logStream: ReturnType<typeof createWriteStream> | null = null;
+  private currentLogFile: string | null = null;
+  private logDir = "./logs";
+  private rotationConfig: LogRotationConfig = {
+    maxSize: 10 * 1024 * 1024,
+    maxFiles: 7,
+    compress: true
+  };
 
   constructor() {
     this.environment = process.env.NODE_ENV || 'development';
@@ -39,6 +58,10 @@ class Logger {
       /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi,
       /\d{13,19}/g,
       /\d{3}-\d{2}-\d{4}/g,
+      // CRITICAL FIX #15: Redact database connection strings (postgres://...)
+      /postgres(?:ql)?:\/\/[^\s]+/gi,
+      /mysql:\/\/[^\s]+/gi,
+      /mongodb(?:\+srv)?:\/\/[^\s]+/gi,
     ];
     
     this.secretKeys = new Set([
@@ -72,7 +95,70 @@ class Logger {
       'openai_key',
       'webhooksecret',
       'webhook_secret',
+      // CRITICAL FIX #15: Prevent database connection string logging
+      'database_url',
+      'connectionstring',
+      'connection_string',
+      'db_url',
+      'postgres',
+      'postgresql',
     ]);
+
+    this.initializeLogRotation();
+  }
+
+  private initializeLogRotation(): void {
+    if (!existsSync(this.logDir)) {
+      mkdirSync(this.logDir, { recursive: true });
+    }
+
+    this.rotateLogFile();
+    setInterval(() => this.checkAndRotate(), 60000);
+  }
+
+  private rotateLogFile(): void {
+    if (this.logStream) {
+      this.logStream.end();
+    }
+
+    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    this.currentLogFile = join(this.logDir, `app-${timestamp}.log`);
+    this.logStream = createWriteStream(this.currentLogFile, { flags: 'a' });
+    
+    this.cleanupOldLogs();
+  }
+
+  private checkAndRotate(): void {
+    if (!this.currentLogFile || !existsSync(this.currentLogFile)) {
+      this.rotateLogFile();
+      return;
+    }
+
+    const stats = statSync(this.currentLogFile);
+    if (stats.size >= this.rotationConfig.maxSize) {
+      this.rotateLogFile();
+    }
+  }
+
+  private cleanupOldLogs(): void {
+    try {
+      const files = readdirSync(this.logDir)
+        .filter(file => file.startsWith('app-') && file.endsWith('.log'))
+        .map(file => ({
+          name: file,
+          path: join(this.logDir, file),
+          time: statSync(join(this.logDir, file)).mtime.getTime()
+        }))
+        .sort((a, b) => b.time - a.time);
+
+      if (files.length > this.rotationConfig.maxFiles) {
+        files.slice(this.rotationConfig.maxFiles).forEach(file => {
+          unlinkSync(file.path);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to cleanup old logs:', error);
+    }
   }
 
   private redactSecrets(value: any): any {
@@ -139,6 +225,10 @@ class Logger {
 
     const formatted = this.formatLog(entry);
 
+    if (this.logStream && this.environment === 'production') {
+      this.logStream.write(formatted + '\n');
+    }
+
     switch (level) {
       case LogLevel.ERROR:
       case LogLevel.CRITICAL:
@@ -181,7 +271,13 @@ class Logger {
       }),
     };
 
-    console.error(this.formatLog(entry));
+    const formatted = this.formatLog(entry);
+    
+    if (this.logStream && this.environment === 'production') {
+      this.logStream.write(formatted + '\n');
+    }
+    
+    console.error(formatted);
   }
 
   critical(message: string, error?: Error, context?: Record<string, any>): void {
@@ -199,7 +295,13 @@ class Logger {
       }),
     };
 
-    console.error(this.formatLog(entry));
+    const formatted = this.formatLog(entry);
+    
+    if (this.logStream && this.environment === 'production') {
+      this.logStream.write(formatted + '\n');
+    }
+    
+    console.error(formatted);
   }
 
   async logAudit(userId: string, action: string, resource: string, resourceId?: string, details?: any): Promise<void> {
@@ -243,6 +345,12 @@ class Logger {
     };
 
     next();
+  }
+
+  shutdown(): void {
+    if (this.logStream) {
+      this.logStream.end();
+    }
   }
 }
 

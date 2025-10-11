@@ -20,12 +20,7 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
-  const serverOptions = {
-    middlewareMode: true,
-    hmr: false,
-    host: '0.0.0.0',
-  };
-
+  console.log('Creating Vite server...');
   const vite = await createViteServer({
     ...viteConfig,
     configFile: false,
@@ -36,10 +31,21 @@ export async function setupVite(app: Express, server: Server) {
         process.exit(1);
       },
     },
-    server: serverOptions,
+    server: {
+      ...viteConfig.server,
+      middlewareMode: true,
+      // CRITICAL FIX #0-2: Enable HMR with proper WebSocket configuration
+      hmr: {
+        server: server, // Use existing HTTP server for WebSocket upgrades
+        // This allows HMR WebSocket to work through the same port as Express
+      },
+      host: '0.0.0.0',
+      allowedHosts: true,
+    },
     appType: "custom",
   });
 
+  console.log('Vite server created, adding middlewares...');
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;

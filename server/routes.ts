@@ -2,13 +2,15 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import Stripe from "stripe";
 import { storage } from "./storage";
-import { 
-  register, 
-  login, 
-  logout, 
-  getCurrentUser, 
-  authenticateToken, 
-  optionalAuth, 
+import { db } from "./db";
+import { sql } from "drizzle-orm";
+import {
+  register,
+  login,
+  logout,
+  getCurrentUser,
+  authenticateToken,
+  optionalAuth,
   requireRole,
   refreshTokens,
   hashPassword,
@@ -20,7 +22,10 @@ import {
   generate2FABackupCodes,
   hashBackupCodes,
   createSession,
-  type AuthenticatedRequest 
+  isPasswordReused,
+  addPasswordToHistory,
+  verifyToken,
+  type AuthenticatedRequest
 } from "./auth";
 import { type User } from "@shared/schema";
 import {
@@ -43,17 +48,19 @@ import multer from 'multer';
 import express from 'express';
 import { uploadSingle, uploadMultiple, uploadImage, UPLOAD_DIR, verifyFileType } from "./middleware/upload";
 import { basicVirusScan } from "./middleware/virus-scan";
-import { 
-  successResponse, 
-  paginatedResponse, 
-  errorResponse, 
-  notFoundResponse, 
-  unauthorizedResponse, 
-  forbiddenResponse, 
+import { sanitizeSearchInput } from "./utils/security";
+import { postUploadSecurityValidation, setSecureDownloadHeaders } from "./middleware/file-upload-security";
+import {
+  successResponse,
+  paginatedResponse,
+  errorResponse,
+  notFoundResponse,
+  unauthorizedResponse,
+  forbiddenResponse,
   validationErrorResponse,
-  calculatePagination 
+  calculatePagination
 } from "./utils/apiResponse";
-import { 
+import {
   passwordResetRateLimiter,
   twoFactorVerifyRateLimiter,
   twoFactorSetupRateLimiter,
@@ -66,73 +73,130 @@ import {
   tokenRefreshRateLimiter,
   webhookRateLimiter,
   healthCheckRateLimiter,
-  staticAssetRateLimiter
+  staticAssetRateLimiter,
+  productCreationRateLimiter,
+  mediaUploadRateLimiter,
+  csrfTokenRateLimiter,
+  backupCodesRateLimiter,
+  adminQueryOperationsRateLimiter
 } from "./middleware/rate-limit-enhanced";
-import { 
-  isPasswordReused, 
-  addPasswordToHistory 
-} from "./auth-enhanced";
+import { idempotencyMiddleware } from "./middleware/idempotency";
+import { cacheMiddleware, invalidateCacheMiddleware } from "./middleware/cache";
+import { stripeIPWhitelistMiddleware } from "./middleware/stripe-ip-whitelist";
+import {
+  validateRequest,
+  registerSchema,
+  loginSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+  verify2FASchema,
+  updateProfileSchema,
+  createPaymentIntentSchema,
+  createSubscriptionSchema,
+  createProductSchema,
+  updateProductSchema,
+  createOrderSchema,
+  updateOrderStatusSchema,
+  createPostSchema,
+  updatePostSchema,
+  createMessageSchema,
+  generateWebsiteSchema,
+  generateBlogSchema,
+  generateMarketingSchema,
+  optimizeSEOSchema,
+  chatbotSchema,
+  analyzeContentSchema,
+  generateCompleteWebsiteSchema,
+  generateComponentSchema,
+  generateTemplateSchema,
+  enhanceContentSchema,
+  advancedGenerationSchema,
+  paginationQuerySchema,
+  idParamSchema,
+  disable2FASchema,
+  enable2FASchema,
+  logoutAllSchema,
+  refundOrderSchema,
+  updateUserSchema,
+  chatbotMessageSchema
+} from "./validation/route-schemas";
+import { aiRateLimiter } from "./middleware/ai-rate-limiter";
+import { emailVerificationRouter } from './routes/password-reset-validation';
+import { adminRouter } from './routes/admin';
+import { register as metricsRegister } from './monitoring/metrics';
+import { passwordResetLockoutMiddleware, validateRedirectUrlMiddleware, recordPasswordResetAttempt } from './middleware/password-reset-lockout';
+import { attachFingerprint, sessionFingerprintValidation } from './middleware/session-fingerprint';
+import { captchaMiddleware } from './middleware/captcha';
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
-}
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+import { validateEnvironmentVariables } from './env.validation';
+
+// Environment variables are validated on startup in index.ts
+// No need for duplicate checks here
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-08-27.basil",
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health check endpoint (with permissive rate limiting for monitoring)
-  app.get("/api/health", healthCheckRateLimiter, async (req, res) => {
-    const { checkDatabaseHealth, getDatabaseStats } = await import("./db");
-    const { queryMonitor } = await import("./middleware/query-monitor");
-    const dbHealth = await checkDatabaseHealth();
-    const dbStats = getDatabaseStats();
-    const queryMetrics = queryMonitor.getMetrics();
-    
-    const health = {
-      status: dbHealth.healthy ? "ok" : "degraded",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      database: {
-        healthy: dbHealth.healthy,
-        latency: dbHealth.latency,
-        error: dbHealth.error,
-        pool: {
-          total: dbStats.totalConnections,
-          idle: dbStats.idleConnections,
-          waiting: dbStats.waitingClients,
-          max: dbStats.poolMax,
-        },
-        queries: {
-          total: queryMetrics.totalQueries,
-          slow: queryMetrics.slowQueries,
-          failed: queryMetrics.failedQueries,
-          averageTime: Math.round(queryMetrics.averageQueryTime),
-        }
-      }
-    };
-    
-    res.status(dbHealth.healthy ? 200 : 503).json(health);
+  // API Versioning Middleware - Add version headers to all API responses
+  app.use('/api', (req, res, next) => {
+    res.setHeader('API-Version', 'v1');
+    res.setHeader('X-API-Version', '1.0.0');
+    res.setHeader('X-Powered-By', 'EchoVerse Platform');
+    next();
   });
+
+  // Root route handler - API status
+  app.get("/api", (req, res) => {
+    res.status(200).json({
+      service: 'EchoVerse Platform API',
+      version: '1.0.0',
+      apiVersion: 'v1',
+      status: 'operational',
+      environment: process.env.NODE_ENV || 'development',
+      timestamp: new Date().toISOString(),
+      documentation: process.env.NODE_ENV === 'development' ? '/api-docs' : undefined,
+      endpoints: {
+        health: '/api/health',
+        metrics: '/metrics',
+        auth: '/api/auth',
+        users: '/api/users',
+        products: '/api/products',
+        orders: '/api/orders',
+        posts: '/api/posts',
+        ai: '/api/ai'
+      }
+    });
+  });
+
 
   // CSRF token bootstrap endpoint - ensures cookie is set before SPA makes state-changing requests
-  app.get("/api/csrf-token", (req, res) => {
-    const csrfToken = req.cookies?.['XSRF-TOKEN'];
-    res.json({ token: csrfToken || 'Cookie will be set on next request' });
+  // PHASE 1: Added rate limiting to prevent CSRF token endpoint abuse
+  app.get("/api/csrf-token", csrfTokenRateLimiter, (req, res) => {
+    // The setCsrfTokenCookie middleware has already set the token in response header and cookie
+    // Read from response header first (most reliable), then fallback to cookies
+    const csrfToken = res.getHeader('X-CSRF-Token') as string || 
+                     req.cookies?.['XSRF-TOKEN'] || 
+                     req.cookies?.['CSRF-TOKEN'] || 
+                     req.cookies?.['__Host-CSRF-TOKEN'];
+    
+    res.json({ 
+      token: csrfToken,
+      message: 'CSRF token set successfully'
+    });
   });
 
-  // Query monitoring endpoint (admin only)
-  app.get("/api/admin/query-metrics", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  // Query monitoring endpoint (admin only) - CRIT-002 FIX: Added rate limiting
+  app.get("/api/admin/query-metrics", authenticateToken, adminQueryOperationsRateLimiter, async (req: AuthenticatedRequest, res) => {
     if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
     }
-    
+
     const { queryMonitor } = await import("./middleware/query-monitor");
     const metrics = queryMonitor.getMetrics();
     const slowQueries = queryMonitor.getSlowQueries(20);
     const failedQueries = queryMonitor.getFailedQueries(20);
-    
+
     res.json({
       metrics: {
         totalQueries: metrics.totalQueries,
@@ -146,47 +210,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Authentication routes with rate limiting
-  app.post("/api/auth/register", registrationRateLimiter, register);
-  app.post("/api/auth/login", loginRateLimiter, login);
+  // Database stats endpoint (admin only) - CRIT-002 FIX: Created with rate limiting
+  app.get("/api/admin/db-stats", authenticateToken, adminQueryOperationsRateLimiter, async (req: AuthenticatedRequest, res) => {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    try {
+      const stats = await db.execute(sql`
+        SELECT 
+          schemaname,
+          tablename,
+          pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
+          pg_total_relation_size(schemaname||'.'||tablename) AS size_bytes
+        FROM pg_tables
+        WHERE schemaname = 'public'
+        ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+        LIMIT 20
+      `);
+
+      const connectionStats = await db.execute(sql`
+        SELECT 
+          count(*) as total_connections,
+          count(*) FILTER (WHERE state = 'active') as active_connections,
+          count(*) FILTER (WHERE state = 'idle') as idle_connections
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+      `);
+
+      res.json({
+        tables: stats.rows,
+        connections: connectionStats.rows[0],
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Failed to fetch database stats', error as Error);
+      res.status(500).json({ error: 'Failed to fetch database statistics' });
+    }
+  });
+
+  // Authentication routes with rate limiting and validation
+  app.post("/api/auth/register", registrationRateLimiter, captchaMiddleware, validateRequest(registerSchema), register);
+  app.post("/api/auth/login", loginRateLimiter, captchaMiddleware, validateRequest(loginSchema), login);
   app.post("/api/auth/logout", authenticateToken, logout);
   app.post("/api/auth/refresh", tokenRefreshRateLimiter, refreshTokens); // CRITICAL: Rate limit token refresh
   app.get("/api/auth/me", authenticateToken, getCurrentUser);
-  
-  // Logout from all devices (invalidate all sessions except current)
-  app.post("/api/auth/logout-all", authenticateToken, async (req: AuthenticatedRequest, res) => {
+
+  // Logout from all devices (invalidate all sessions except current) - PHASE 1: Added validation
+  app.post("/api/auth/logout-all", authenticateToken, validateRequest(logoutAllSchema), async (req: AuthenticatedRequest, res) => {
     const { terminateAllUserSessions } = await import("./utils/session-manager");
     try {
       const keepCurrent = req.body.keepCurrent !== false; // Default to keeping current session
       const sessionId = req.sessionId;
       const count = await terminateAllUserSessions(req.user!.id, keepCurrent ? sessionId : undefined);
-      return successResponse(res, { 
+      return successResponse(res, {
         message: keepCurrent ? 'Logged out of all other devices' : 'Logged out of all devices',
-        sessionsTerminated: count 
+        sessionsTerminated: count
       });
     } catch (error) {
       logger.error('Logout all devices failed', error instanceof Error ? error : undefined);
       return errorResponse(res, 'Failed to logout from all devices', 500);
     }
   });
-  
+
   // User Profile Management
-  app.put("/api/users/profile", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  app.put("/api/users/profile", authenticateToken, validateRequest(updateProfileSchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { firstName, lastName, avatar } = req.body;
       const updates: Partial<User> = {};
-      
+
       if (firstName !== undefined) updates.firstName = firstName;
       if (lastName !== undefined) updates.lastName = lastName;
       if (avatar !== undefined) updates.avatar = avatar;
-      
+
       const updatedUser = await storage.updateUser(req.user!.id, updates);
-      
+
       if (!updatedUser) {
         res.status(404).json({ message: "User not found" });
         return;
       }
-      
+
       const { password: _, ...userWithoutPassword } = updatedUser;
       res.json({ user: userWithoutPassword });
     } catch (error) {
@@ -194,84 +297,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Password Reset Request with rate limiting
-  app.post("/api/auth/request-password-reset", passwordResetRateLimiter, async (req, res) => {
+  // Password Reset Request with rate limiting and validation
+  // PHASE 1: Added password reset lockout and redirect URL validation
+  app.post("/api/auth/request-password-reset", passwordResetRateLimiter, passwordResetLockoutMiddleware, validateRedirectUrlMiddleware, validateRequest(requestPasswordResetSchema), async (req, res) => {
     try {
       const { email } = req.body;
-      
+
       if (!email) {
         res.status(400).json({ message: "Email is required" });
         return;
       }
-      
+
       const user = await storage.getUserByEmail(email);
-      
+      const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
+
       if (user) {
         // Store token in database with expiry and get the generated token
         const { createPasswordResetToken } = await import('./auth-enhanced');
-        const ipAddress = req.ip || 'unknown';
         const userAgent = req.get('user-agent') || 'unknown';
         const resetToken = await createPasswordResetToken(user.id, ipAddress, userAgent);
-        
+
         // Send password reset email
         const { sendPasswordResetEmail } = await import('./services/email');
         await sendPasswordResetEmail(email, resetToken);
-        
+
+        // PHASE 1: Record successful password reset request
+        await recordPasswordResetAttempt(email, ipAddress, true);
         logger.info('Password reset requested', { userId: user.id, email });
       }
-      
+
       // Always return same message for security (prevents user enumeration)
-      res.json({ 
-        message: "If an account exists with this email, a password reset link will be sent to your email address." 
+      res.json({
+        message: "If an account exists with this email, a password reset link will be sent to your email address."
       });
     } catch (error) {
       logger.error('Password reset request failed', error instanceof Error ? error : undefined);
       res.status(500).json({ message: "Error processing request" });
     }
   });
-  
-  // Change Password (authenticated) with password history check
-  app.post("/api/auth/change-password", authenticateToken, passwordChangeRateLimiter, async (req: AuthenticatedRequest, res) => {
+
+  // Change Password (authenticated) with password history check and validation
+  app.post("/api/auth/change-password", authenticateToken, passwordChangeRateLimiter, validateRequest(changePasswordSchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
-      
+
       if (!currentPassword || !newPassword) {
         res.status(400).json({ message: "Current and new passwords are required" });
         return;
       }
-      
+
       if (newPassword.length < 8) {
         res.status(400).json({ message: "New password must be at least 8 characters" });
         return;
       }
-      
+
       const user = await storage.getUser(req.user!.id);
       if (!user) {
         res.status(404).json({ message: "User not found" });
         return;
       }
-      
+
       const isValidPassword = await verifyPassword(currentPassword, user.password);
       if (!isValidPassword) {
         res.status(401).json({ message: "Current password is incorrect" });
         return;
       }
-      
+
       // Check if password was used recently
       const isReused = await isPasswordReused(user.id, newPassword);
       if (isReused) {
         res.status(400).json({ message: "Cannot reuse a recent password. Please choose a different password." });
         return;
       }
-      
+
+      // SECURITY: Check password against HaveIBeenPwned breach database
+      const { validatePasswordSecurity } = await import('./services/hibp');
+      const passwordValidation = await validatePasswordSecurity(newPassword);
+
+      if (!passwordValidation.valid) {
+        res.status(400).json({
+          message: "Password does not meet security requirements",
+          errors: passwordValidation.errors,
+          warnings: passwordValidation.warnings
+        });
+        return;
+      }
+
       const hashedPassword = await hashPassword(newPassword);
       await storage.updateUser(user.id, { password: hashedPassword });
-      
+
       // Add old password to history
       await addPasswordToHistory(user.id, user.password);
-      
+
       await invalidateAllUserSessions(user.id);
-      
+
       logger.info('Password changed successfully', { userId: user.id });
       res.json({ message: "Password changed successfully. Please log in again." });
     } catch (error) {
@@ -280,54 +399,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reset Password (with token from email) with password history check
-  app.post("/api/auth/reset-password", passwordResetRateLimiter, async (req, res) => {
+  // Reset Password (with token from email) with password history check and validation
+  // PHASE 1: Added password reset lockout middleware
+  app.post("/api/auth/reset-password", passwordResetRateLimiter, passwordResetLockoutMiddleware, validateRequest(resetPasswordSchema), async (req, res) => {
     try {
       const { token, newPassword } = req.body;
-      
+
       if (!token || !newPassword) {
         res.status(400).json({ message: "Token and new password are required" });
         return;
       }
-      
+
       if (newPassword.length < 8) {
         res.status(400).json({ message: "Password must be at least 8 characters" });
         return;
       }
+
+      // CRITICAL FIX #4: Extract IP and User-Agent for token validation
+      const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
+      const userAgent = req.headers['user-agent'] || '';
       
-      // Validate password reset token
+      // Validate password reset token with IP/UA binding
       const { validatePasswordResetToken, markTokenAsUsed } = await import('./auth-enhanced');
-      const validation = await validatePasswordResetToken(token);
-      
+      const validation = await validatePasswordResetToken(token, ipAddress, userAgent);
+
       if (!validation.valid) {
+        // PHASE 1: Record failed password reset attempt
+        await recordPasswordResetAttempt('unknown', ipAddress, false);
         res.status(400).json({ message: validation.error || "Invalid or expired token" });
         return;
       }
-      
+
       // Check if password was used recently
       const isReused = await isPasswordReused(validation.userId!, newPassword);
       if (isReused) {
         res.status(400).json({ message: "Cannot reuse a recent password. Please choose a different password." });
         return;
       }
-      
+
+      // SECURITY: Check password against HaveIBeenPwned breach database
+      const { validatePasswordSecurity } = await import('./services/hibp');
+      const passwordValidation = await validatePasswordSecurity(newPassword);
+
+      if (!passwordValidation.valid) {
+        res.status(400).json({
+          message: "Password does not meet security requirements",
+          errors: passwordValidation.errors,
+          warnings: passwordValidation.warnings
+        });
+        return;
+      }
+
       // Get current password for history
       const user = await storage.getUser(validation.userId!);
       if (user) {
         // Add current password to history before changing
         await addPasswordToHistory(user.id, user.password);
       }
-      
+
       // Update user password
       const hashedPassword = await hashPassword(newPassword);
       await storage.updateUser(validation.userId!, { password: hashedPassword });
-      
+
       // Mark token as used
       await markTokenAsUsed(token);
-      
+
       // Invalidate all user sessions for security
       await invalidateAllUserSessions(validation.userId!);
-      
+
       logger.info('Password reset successful', { userId: validation.userId });
       res.json({ message: "Password reset successfully. Please log in with your new password." });
     } catch (error) {
@@ -340,47 +479,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/2fa/setup", authenticateToken, twoFactorSetupRateLimiter, async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user!;
-      
+
       if (user.twoFactorEnabled) {
         res.status(400).json({ message: "2FA is already enabled" });
         return;
       }
-      
+
       const { secret, otpauthUrl } = generate2FASecret(user.username);
       const qrCode = await generateQRCode(otpauthUrl);
-      
+
       res.json({ secret, qrCode, otpauthUrl });
     } catch (error) {
       res.status(500).json({ message: "Error setting up 2FA" });
     }
   });
 
-  // 2FA Enable - Verify token and save secret with rate limiting
-  app.post("/api/auth/2fa/enable", authenticateToken, twoFactorVerifyRateLimiter, async (req: AuthenticatedRequest, res) => {
+  // 2FA Enable - Verify token and save secret with rate limiting and validation (PHASE 1: Updated validation)
+  app.post("/api/auth/2fa/enable", authenticateToken, twoFactorVerifyRateLimiter, validateRequest(enable2FASchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { secret, token } = req.body;
-      
-      if (!secret || !token) {
-        res.status(400).json({ message: "Secret and token are required" });
-        return;
-      }
-      
+
       const isValid = verify2FAToken(secret, token);
       if (!isValid) {
         res.status(401).json({ message: "Invalid verification token" });
         return;
       }
-      
+
       const backupCodes = generate2FABackupCodes(8);
       const hashedBackupCodes = await hashBackupCodes(backupCodes);
-      
+
       await storage.updateUser(req.user!.id, {
         twoFactorEnabled: true,
         twoFactorSecret: secret,
         twoFactorBackupCodes: hashedBackupCodes
       });
-      
-      res.json({ 
+
+      res.json({
         message: "2FA enabled successfully",
         backupCodes: backupCodes
       });
@@ -389,37 +523,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 2FA Disable - Verify token and disable with rate limiting
-  app.post("/api/auth/2fa/disable", authenticateToken, twoFactorVerifyRateLimiter, async (req: AuthenticatedRequest, res) => {
+  // 2FA Disable - Verify token and disable with rate limiting (PHASE 1: Added validation)
+  app.post("/api/auth/2fa/disable", authenticateToken, twoFactorVerifyRateLimiter, validateRequest(disable2FASchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { token } = req.body;
       const user = req.user!;
-      
+
       if (!user.twoFactorEnabled || !user.twoFactorSecret) {
         res.status(400).json({ message: "2FA is not enabled" });
         return;
       }
-      
-      if (!token) {
-        res.status(400).json({ message: "Verification token is required" });
-        return;
-      }
-      
+
       const isValid = verify2FAToken(user.twoFactorSecret, token);
       if (!isValid) {
         res.status(401).json({ message: "Invalid verification token" });
         return;
       }
-      
+
       await storage.updateUser(user.id, {
         twoFactorEnabled: false,
         twoFactorSecret: null,
         twoFactorBackupCodes: null
       });
-      
+
       res.json({ message: "2FA disabled successfully" });
     } catch (error) {
       res.status(500).json({ message: "Error disabling 2FA" });
+    }
+  });
+
+  // 2FA Backup Codes - Regenerate backup codes (PHASE 1 CRITICAL SECURITY)
+  app.post("/api/auth/2fa/backup-codes", authenticateToken, backupCodesRateLimiter, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user!;
+
+      if (!user.twoFactorEnabled) {
+        res.status(400).json({ message: "2FA is not enabled" });
+        return;
+      }
+
+      // Generate new backup codes
+      const backupCodes = generate2FABackupCodes(8);
+      const hashedBackupCodes = await hashBackupCodes(backupCodes);
+
+      // Update user with new backup codes
+      await storage.updateUser(user.id, {
+        twoFactorBackupCodes: hashedBackupCodes
+      });
+
+      res.json({
+        message: "Backup codes regenerated successfully",
+        backupCodes: backupCodes
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error regenerating backup codes" });
     }
   });
 
@@ -427,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/auth/verify-email", async (req, res) => {
     try {
       const { token } = req.query;
-      
+
       if (!token || typeof token !== 'string') {
         res.status(400).json({ message: "Verification token is required" });
         return;
@@ -503,13 +660,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PHASE 3: Magic Link Authentication - Request link
+  app.post("/api/auth/magic-link/request", loginRateLimiter, async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        res.status(400).json({ message: "Email is required" });
+        return;
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        res.json({ message: "If an account exists, a magic link has been sent" });
+        return;
+      }
+
+      const { createMagicLink } = await import('./services/magic-link');
+      const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
+      const token = await createMagicLink(user.id, email, ipAddress);
+
+      const { sendMagicLinkEmail } = await import('./services/email');
+      await sendMagicLinkEmail(email, token);
+
+      res.json({ message: "If an account exists, a magic link has been sent" });
+    } catch (error) {
+      logger.error('Magic link request failed', error instanceof Error ? error : undefined);
+      res.status(500).json({ message: "Failed to send magic link" });
+    }
+  });
+
+  // PHASE 3: Magic Link Authentication - Verify and login
+  app.post("/api/auth/magic-link/verify", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        res.status(400).json({ message: "Token is required" });
+        return;
+      }
+
+      const { validateMagicLink, useMagicLink } = await import('./services/magic-link');
+      const validation = await validateMagicLink(token);
+
+      if (!validation.valid || !validation.userId) {
+        res.status(400).json({ message: validation.error || "Invalid magic link" });
+        return;
+      }
+
+      await useMagicLink(token);
+
+      const user = await storage.getUser(validation.userId);
+      if (!user) {
+        res.status(404).json({ message: "User not found" });
+        return;
+      }
+
+      const { sessionId, accessToken, refreshToken } = await createSession(user.id);
+      const { password: _, ...userWithoutPassword } = user;
+
+      logger.info('Magic link login successful', { userId: user.id });
+      res.json({
+        message: "Login successful",
+        user: userWithoutPassword,
+        accessToken,
+        refreshToken,
+        sessionId,
+      });
+    } catch (error) {
+      logger.error('Magic link verification failed', error instanceof Error ? error : undefined);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // PHASE 3: Device Management - Get active sessions
+  app.get("/api/auth/sessions", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { getUserActiveSessions } = await import('./services/device-management');
+      const sessions = await getUserActiveSessions(req.user!.id, req.sessionId);
+      res.json({ sessions });
+    } catch (error) {
+      logger.error('Failed to get user sessions', error instanceof Error ? error : undefined);
+      res.status(500).json({ message: "Failed to retrieve sessions" });
+    }
+  });
+
+  // PHASE 3: Device Management - Revoke specific session
+  app.delete("/api/auth/sessions/:sessionId", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { sessionId } = req.params;
+      const { revokeDeviceSession } = await import('./services/device-management');
+      
+      const success = await revokeDeviceSession(req.user!.id, sessionId);
+      if (success) {
+        res.json({ message: "Session revoked successfully" });
+      } else {
+        res.status(404).json({ message: "Session not found" });
+      }
+    } catch (error) {
+      logger.error('Failed to revoke session', error instanceof Error ? error : undefined);
+      res.status(500).json({ message: "Failed to revoke session" });
+    }
+  });
+
   // GDPR - Data Export
   app.get("/api/gdpr/export", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const userId = req.user!.id;
-      
+
       const { password: _, twoFactorSecret: __, ...safeUser } = req.user!;
-      
+
       const [
         userWebsites,
         userProducts,
@@ -525,7 +785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getCommunities({ userId, limit: 1000, offset: 0 }),
         storage.getCampaigns(userId, { status: undefined })
       ]);
-      
+
       const userData = {
         user: safeUser,
         websites: userWebsites,
@@ -536,10 +796,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         campaigns: userCampaigns,
         exportDate: new Date().toISOString()
       };
-      
-      res.json({ 
-        message: "Data export complete", 
-        data: userData 
+
+      res.json({
+        message: "Data export complete",
+        data: userData
       });
     } catch (error) {
       res.status(500).json({ message: "Error exporting data" });
@@ -550,46 +810,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/gdpr/delete-account", authenticateToken, accountDeletionRateLimiter, async (req: AuthenticatedRequest, res) => {
     try {
       const { password, confirmation } = req.body;
-      
+
       if (!password || confirmation !== "DELETE") {
-        res.status(400).json({ 
-          message: "Password and confirmation (type 'DELETE') are required" 
+        res.status(400).json({
+          message: "Password and confirmation (type 'DELETE') are required"
         });
         return;
       }
-      
+
       const user = await storage.getUser(req.user!.id);
       if (!user) {
         res.status(404).json({ message: "User not found" });
         return;
       }
-      
+
       const isValidPassword = await verifyPassword(password, user.password);
       if (!isValidPassword) {
         res.status(401).json({ message: "Invalid password" });
         return;
       }
-      
+
       await storage.deleteUser(user.id);
-      
+
       await invalidateAllUserSessions(user.id);
-      
+
       res.json({ message: "Account deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Error deleting account" });
     }
   });
 
-  // Stripe payment route for one-time payments
-  app.post("/api/create-payment-intent", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  // P0 FIX #22: Stripe payment route with idempotency protection
+  const { stripeIdempotencyMiddleware, getStripeIdempotencyKey } = await import('./middleware/stripe-idempotency');
+  
+  app.post("/api/create-payment-intent", authenticateToken, stripeIdempotencyMiddleware, validateRequest(createPaymentIntentSchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { amount } = req.body;
+      const idempotencyKey = getStripeIdempotencyKey(req as any);
+      
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(amount * 100), // Convert to cents
         currency: "usd",
         metadata: {
           userId: req.user!.id,
         },
+      }, {
+        idempotencyKey // P0 FIX #22: Pass idempotency key to Stripe API
       });
       res.json({ clientSecret: paymentIntent.client_secret });
     } catch (error: any) {
@@ -599,8 +865,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Subscription endpoint
-  app.post('/api/get-or-create-subscription', authenticateToken, async (req: AuthenticatedRequest, res) => {
+  // P0 FIX #22: Subscription endpoint with idempotency protection
+  app.post('/api/get-or-create-subscription', authenticateToken, stripeIdempotencyMiddleware, validateRequest(createSubscriptionSchema), async (req: AuthenticatedRequest, res) => {
     const user = req.user!;
 
     if (user.stripeSubscriptionId) {
@@ -612,16 +878,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: subscription.status,
           });
         } catch (error) {
-          console.error('Error retrieving subscription:', error);
+          logger.error('Error retrieving subscription', error instanceof Error ? error : new Error(String(error)));
           res.status(500).json({ message: 'Error retrieving subscription details' });
           return;
         }
         return;
       } catch (error) {
-        console.error('Error retrieving subscription:', error);
+        logger.error('Error retrieving subscription', error instanceof Error ? error : new Error(String(error)));
       }
     }
-    
+
     if (!user.email) {
       res.status(400).json({ message: 'User email is required for subscriptions' });
       return;
@@ -646,7 +912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(500).json({ message: 'STRIPE_PRICE_ID not configured. Please contact support.' });
         return;
       }
-      
+
       const subscription = await stripe.subscriptions.create({
         customer: customer.id,
         items: [{
@@ -660,22 +926,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       await storage.updateUserStripeInfo(user.id, {
-        customerId: customer.id, 
+        customerId: customer.id,
         subscriptionId: subscription.id
       });
-  
+
       res.send({
         subscriptionId: subscription.id,
         clientSecret: (subscription.latest_invoice as any)?.payment_intent?.client_secret,
       });
     } catch (error: any) {
-      console.error('Subscription creation error:', error);
+      logger.error('Subscription creation error', error instanceof Error ? error : new Error(String(error)));
       return res.status(400).send({ error: { message: error.message } });
     }
   });
 
   // Stripe webhook handler - uses raw body parser configured in server/index.ts
-  app.post('/api/webhooks/stripe', webhookRateLimiter, async (req, res) => {
+  // CRIT-004 FIX: Add IP whitelist validation to prevent spoofing attacks
+  app.post('/api/webhooks/stripe', stripeIPWhitelistMiddleware, webhookRateLimiter, async (req, res) => {
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
       logger.error('STRIPE_WEBHOOK_SECRET is not configured. Rejecting webhook.');
       return res.status(500).json({ error: 'Webhook secret not configured' });
@@ -687,18 +954,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'Missing signature' });
     }
 
-    let event;
-    try {
-      // req.body is a raw Buffer because of express.raw middleware
-      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } catch (err: any) {
-      logger.error('Webhook signature verification failed', err instanceof Error ? err : undefined);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
+    // PHASE 1: Use webhook signature fallback verification for enhanced security
+    const { verifyStripeWebhookWithFallback } = await import('./utils/webhook-signature-fallback');
+    const verificationResult = await verifyStripeWebhookWithFallback(req.body, sig as string, stripe);
+    
+    if (!verificationResult.verified) {
+      logger.error('Webhook signature verification failed (all methods)', new Error(verificationResult.error || 'Unknown verification error'));
+      return res.status(401).send(`Webhook Error: ${verificationResult.error}`);
+    }
+    
+    const event = verificationResult.event;
+    
+    // CRIT-012 FIX: Add timestamp validation to prevent replay attacks
+    // Stripe includes timestamp in signature, reject if older than 5 minutes
+    const WEBHOOK_TOLERANCE_SECONDS = 300; // 5 minutes
+    const timestamp = event.created || 0;
+    const currentTime = Math.floor(Date.now() / 1000);
+    
+    if (timestamp < currentTime - WEBHOOK_TOLERANCE_SECONDS) {
+      logger.warn('Webhook rejected - timestamp too old (potential replay attack)', {
+        eventId: event.id,
+        eventTimestamp: timestamp,
+        age: currentTime - timestamp
+      });
+      return res.status(400).send('Webhook Error: Event timestamp too old');
+    }
+    
+    if (verificationResult.method !== 'primary') {
+      logger.warn('Webhook verified with non-primary method', {
+        method: verificationResult.method,
+        eventId: event.id,
+        type: event.type
+      });
     }
 
     const { checkWebhookReplayProtection, markWebhookProcessed } = await import('./utils/webhook');
     const { auditPaymentAction } = await import('./utils/audit');
-    
+
     const isUnique = await checkWebhookReplayProtection(event.id, event.type, event);
     if (!isUnique) {
       logger.warn('Duplicate webhook event - already processed', { eventId: event.id, type: event.type });
@@ -706,65 +998,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     let processingError: string | undefined;
-    
+
     try {
       switch (event.type) {
         case 'customer.subscription.updated':
         case 'customer.subscription.created':
           const subscription = event.data.object as Stripe.Subscription;
-          const customerId = typeof subscription.customer === 'string' 
-            ? subscription.customer 
+          const customerId = typeof subscription.customer === 'string'
+            ? subscription.customer
             : subscription.customer?.id;
-          
+
           if (customerId) {
             const users = await storage.getAllUsers();
             const user = users.find(u => u.stripeCustomerId === customerId);
-            
+
             if (user) {
               await storage.updateUser(user.id, {
                 stripeSubscriptionId: subscription.id,
                 subscriptionTier: subscription.status === 'active' ? 'pro' : 'free'
               });
-              
+
               await auditPaymentAction(
                 user.id,
                 event.type === 'customer.subscription.created' ? 'payment_succeeded' : 'payment_succeeded',
                 subscription.id,
                 { status: subscription.status, tier: subscription.status === 'active' ? 'pro' : 'free' }
               );
-              
+
               logger.info('Subscription updated', { userId: user.id, status: subscription.status, subscriptionId: subscription.id });
             }
           }
           break;
-          
+
         case 'customer.subscription.deleted':
           const deletedSub = event.data.object as Stripe.Subscription;
-          const delCustomerId = typeof deletedSub.customer === 'string' 
-            ? deletedSub.customer 
+          const delCustomerId = typeof deletedSub.customer === 'string'
+            ? deletedSub.customer
             : deletedSub.customer?.id;
-          
+
           if (delCustomerId) {
             const users = await storage.getAllUsers();
             const user = users.find(u => u.stripeCustomerId === delCustomerId);
-            
+
             if (user) {
               await storage.updateUser(user.id, {
                 stripeSubscriptionId: null,
                 subscriptionTier: 'free'
               });
-              
+
               await auditPaymentAction(user.id, 'payment_succeeded', deletedSub.id, { action: 'subscription_cancelled' });
               logger.info('Subscription cancelled', { userId: user.id, subscriptionId: deletedSub.id });
             }
           }
           break;
-          
+
         case 'invoice.payment_succeeded':
           const invoice = event.data.object as Stripe.Invoice;
           logger.info('Invoice payment succeeded', { invoiceId: invoice.id, amount: invoice.amount_paid });
           break;
-          
+
         case 'invoice.payment_failed':
           const failedInvoice = event.data.object as Stripe.Invoice;
           logger.error('Invoice payment failed', new Error('Payment failed'), { invoiceId: failedInvoice.id });
@@ -772,11 +1064,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         case 'payment_intent.succeeded':
           const succeededIntent = event.data.object as Stripe.PaymentIntent;
-          const succeededOrders = await storage.getAllOrders({ 
+          const succeededOrders = await storage.getAllOrders({
             stripePaymentIntentId: succeededIntent.id,
             status: 'pending'
           });
-          
+
           if (succeededOrders.data.length > 0) {
             const order = succeededOrders.data[0];
             await storage.updateOrderStatus(order.id, 'confirmed');
@@ -791,11 +1083,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case 'payment_intent.payment_failed':
         case 'payment_intent.canceled':
           const failedIntent = event.data.object as Stripe.PaymentIntent;
-          const failedOrders = await storage.getAllOrders({ 
+          const failedOrders = await storage.getAllOrders({
             stripePaymentIntentId: failedIntent.id,
             status: 'pending'
           });
-          
+
           if (failedOrders.data.length > 0) {
             const order = failedOrders.data[0];
             await storage.restoreInventory(order.id);
@@ -807,24 +1099,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             logger.info('Order cancelled and inventory restored', { orderId: order.id, paymentIntentId: failedIntent.id });
           }
           break;
-          
+
         case 'charge.refunded':
           const refundedCharge = event.data.object as Stripe.Charge;
           logger.info('Charge refunded', { chargeId: refundedCharge.id, amount: refundedCharge.amount_refunded });
           break;
-          
+
         default:
           logger.debug('Unhandled webhook event type', { type: event.type });
       }
-      
+
       await markWebhookProcessed(event.id);
     } catch (error: any) {
       processingError = error.message;
-      logger.error('Error processing webhook', error instanceof Error ? error : undefined, { 
-        eventId: event.id, 
-        eventType: event.type 
+      logger.error('Error processing webhook', error instanceof Error ? error : undefined, {
+        eventId: event.id,
+        eventType: event.type
       });
-      
+
       await markWebhookProcessed(event.id, processingError);
       return res.status(500).json({ error: 'Webhook processing failed', details: processingError });
     }
@@ -832,163 +1124,225 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ received: true, eventId: event.id });
   });
 
-  // AI Content Generation Endpoints
-  app.post("/api/ai/generate-website", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { prompt, type = 'landing' } = req.body;
-      const content = await generateWebsiteContent(prompt, type);
-      res.json(content);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/ai/generate-blog", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { topic, tone = 'professional', length = 'medium' } = req.body;
-      const content = await generateBlogPost(topic, tone, length);
-      res.json(content);
-    } catch (error: any) {
-      if (error instanceof AIServiceError) {
-        res.status(error.statusCode).json({ message: error.message, code: error.code });
-        return;
+  // AI Content Generation Endpoints (with strict rate limiting after auth)
+  app.post("/api/ai/generate-website", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(generateWebsiteSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { prompt, type = 'landing' } = req.body;
+        const content = await generateWebsiteContent(prompt, type);
+        res.json(content);
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
       }
-      res.status(500).json({ message: "Failed to generate blog post" });
     }
-  });
+  );
 
-  app.post("/api/ai/generate-marketing", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { campaign, type } = req.body;
-      const content = await generateMarketingContent(campaign, type);
-      res.json(content);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-  app.post("/api/ai/optimize-seo", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { content, keywords } = req.body;
-      const optimized = await optimizeForSEO(content, keywords);
-      res.json(optimized);
-    } catch (error: any) {
-      if (error instanceof AIServiceError) {
-        res.status(error.statusCode).json({ message: error.message, code: error.code });
-        return;
+  app.post("/api/ai/generate-blog", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(generateBlogSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { topic, tone = 'professional', length = 'medium' } = req.body;
+        const content = await generateBlogPost(topic, tone, length);
+        res.json(content);
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: "Failed to generate blog post" });
       }
-      res.status(500).json({ message: "Failed to optimize content for SEO" });
     }
-  });
+  );
 
-  app.post("/api/ai/chatbot", async (req, res) => {
-    try {
-      const { message, context = '' } = req.body;
-      const response = await generateChatbotResponse(message, context);
-      res.json({ response });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
+  app.post("/api/ai/generate-marketing", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(generateMarketingSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { product, audience, tone, format } = req.body;
+        const content = await generateMarketingContent(product, format || 'email');
+        res.json(content);
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
+      }
     }
-  });
+  );
 
-  app.post("/api/ai/analyze-content", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { content } = req.body;
-      const analysis = await analyzeContent(content);
-      res.json(analysis);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
+  app.post("/api/ai/optimize-seo", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(optimizeSEOSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { content, targetKeywords } = req.body;
+        const optimized = await optimizeForSEO(content, targetKeywords);
+        res.json(optimized);
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: "Failed to optimize content for SEO" });
+      }
     }
-  });
+  );
+
+  app.post("/api/ai/chatbot", 
+    optionalAuth, 
+    aiRateLimiter, 
+    validateRequest(chatbotSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { message, conversationId, context } = req.body;
+        const response = await generateChatbotResponse(message, context || '');
+        res.json({ response, conversationId });
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
+
+  app.post("/api/ai/analyze-content", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(analyzeContentSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { content, type } = req.body;
+        const analysis = await analyzeContent(content);
+        res.json({ analysis, type });
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
 
   // AI Website Builder - Complete Website Generation
-  app.post("/api/ai/generate-complete-website", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { description, businessType, style = 'modern', pages = ['home', 'about', 'contact'], colorScheme, features } = req.body;
-      
-      if (!description || !businessType) {
-        res.status(400).json({ message: "Description and business type are required" });
-        return;
-      }
-      
-      const website = await generateCompleteWebsite({
-        description,
-        businessType,
-        style,
-        pages,
-        colorScheme,
-        features
-      });
-      
-      res.json({ website });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
+  app.post("/api/ai/generate-complete-website", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(generateCompleteWebsiteSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { description, businessType, style, pages, colorScheme, features } = req.body;
 
-  app.post("/api/ai/generate-component", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { type, description, style = 'modern', content } = req.body;
-      
-      if (!type || !description) {
-        res.status(400).json({ message: "Component type and description are required" });
-        return;
-      }
-      
-      const component = await generateWebComponent({
-        type,
-        description,
-        style,
-        content
-      });
-      
-      res.json({ component });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
-    }
-  });
+        const website = await generateCompleteWebsite({
+          description,
+          businessType,
+          style: style || 'modern',
+          pages,
+          colorScheme,
+          features
+        });
 
-  app.post("/api/ai/generate-template", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { industry, style = 'modern', features = [] } = req.body;
-      
-      if (!industry) {
-        res.status(400).json({ message: "Industry is required" });
-        return;
+        res.json({ website });
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
       }
-      
-      const template = await generateWebsiteTemplate({
-        industry,
-        style,
-        features
-      });
-      
-      res.json({ template });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
     }
-  });
+  );
 
-  app.post("/api/ai/enhance-content", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { content, enhancement = 'readability', target = 'general audience' } = req.body;
-      
-      if (!content) {
-        res.status(400).json({ message: "Content is required" });
-        return;
+  app.post("/api/ai/generate-component", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(generateComponentSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { type, description, style, content } = req.body;
+
+        const component = await generateWebComponent({
+          type,
+          description,
+          style: style || 'modern',
+          content
+        });
+
+        res.json({ component });
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
       }
-      
-      const enhanced = await enhanceWebsiteContent({
-        content,
-        enhancement,
-        target
-      });
-      
-      res.json(enhanced);
-    } catch (error: any) {
-      res.status(500).json({ message: error.message });
     }
-  });
+  );
+
+  app.post("/api/ai/generate-template", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(generateTemplateSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { industry, style, features } = req.body;
+
+        const template = await generateWebsiteTemplate({
+          industry,
+          style: style || 'modern',
+          features: features || []
+        });
+
+        res.json({ template });
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
+
+  app.post("/api/ai/enhance-content", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(enhanceContentSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const { content, enhancement, target, style, tone } = req.body;
+
+        const enhanced = await enhanceWebsiteContent({
+          content,
+          enhancement: enhancement || 'readability',
+          target: target || 'general audience'
+        });
+
+        res.json(enhanced);
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: error.message });
+      }
+    }
+  );
 
   // RBAC Protected Routes
   app.get("/api/admin/users", authenticateToken, requireRole(["admin"]), async (req, res) => {
@@ -1000,7 +1354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error fetching users" });
     }
   });
-  
+
   app.delete("/api/admin/users/:id", authenticateToken, requireRole(["admin"]), async (req, res) => {
     // Delete user (admin only)
     try {
@@ -1010,7 +1364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error deleting user" });
     }
   });
-  
+
   app.put("/api/admin/users/:id/role", authenticateToken, requireRole(["admin"]), async (req, res) => {
     // Update user role (admin only)
     try {
@@ -1025,24 +1379,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Error updating user role" });
     }
   });
-  
+
   // Moderator routes
   app.get("/api/moderate/content", authenticateToken, requireRole(["admin", "moderator"]), async (req, res) => {
     res.json({ message: "Content moderation access granted" });
   });
-  
+
   // Pro subscription required routes
-  app.post("/api/ai/advanced-generation", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    if (!['pro', 'enterprise'].includes(req.user!.subscriptionTier || 'free')) {
-      res.status(403).json({ message: "Pro subscription required" });
-      return;
+  app.post("/api/ai/advanced-generation", 
+    authenticateToken, 
+    aiRateLimiter, 
+    validateRequest(advancedGenerationSchema), 
+    async (req: AuthenticatedRequest, res) => {
+      if (!['pro', 'enterprise'].includes(req.user!.subscriptionTier || 'free')) {
+        res.status(403).json({ message: "Pro subscription required" });
+        return;
+      }
+      
+      try {
+        const { prompt, type, complexity, customizations } = req.body;
+        
+        let contextPrompt = `${prompt}. Complexity level: ${complexity || 'intermediate'}. Type: ${type}.`;
+        if (customizations) {
+          contextPrompt += ` Customizations: ${JSON.stringify(customizations)}`;
+        }
+        
+        // Use chatbot for flexible generation
+        const result = await generateChatbotResponse(contextPrompt, 
+          `You are an expert ${type} creator. Generate ${complexity || 'intermediate'} level content.`
+        );
+        
+        res.json({ 
+          success: true,
+          content: result,
+          type, 
+          complexity: complexity || 'intermediate',
+          tokensUsed: 0
+        });
+      } catch (error: any) {
+        if (error instanceof AIServiceError) {
+          res.status(error.statusCode).json({ message: error.message, code: error.code });
+          return;
+        }
+        res.status(500).json({ message: "Advanced generation failed", error: error.message });
+      }
     }
-    // Advanced AI generation logic here
-    res.json({ message: "Advanced AI generation available" });
-  });
+  );
 
   // E-Commerce Product Management
-  app.get("/api/products", optionalAuth, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/products", cacheMiddleware(300), optionalAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { category, search, limit = 20, offset = 0 } = req.query;
       const pagination = calculatePagination(
@@ -1052,7 +1437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const result = await storage.getProducts({
         category: category as string,
-        search: search as string,
+        search: sanitizeSearchInput(search as string),
         limit: pagination.limit,
         offset: pagination.offset
       });
@@ -1067,7 +1452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/:id", optionalAuth, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/products/:id", cacheMiddleware(600), optionalAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const product = await storage.getProduct(req.params.id);
       if (!product) {
@@ -1080,7 +1465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", authenticateToken, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
+  app.post("/api/products", authenticateToken, productCreationRateLimiter, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
     try {
       const productData = req.body;
       const product = await storage.createProduct({
@@ -1100,13 +1485,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({ message: "Product not found" });
         return;
       }
-      
+
       // Check ownership or admin role
       if (product.userId !== req.user!.id && !['admin', 'moderator'].includes(req.user!.role)) {
         res.status(403).json({ message: "Unauthorized" });
         return;
       }
-      
+
       const updatedProduct = await storage.updateProduct(req.params.id, req.body);
       res.json({ product: updatedProduct });
     } catch (error: any) {
@@ -1121,13 +1506,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({ message: "Product not found" });
         return;
       }
-      
+
       // Check ownership or admin role
       if (product.userId !== req.user!.id && !['admin', 'moderator'].includes(req.user!.role)) {
         res.status(403).json({ message: "Unauthorized" });
         return;
       }
-      
+
       await storage.deleteProduct(req.params.id);
       res.json({ message: "Product deleted successfully" });
     } catch (error) {
@@ -1135,9 +1520,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // File Upload Endpoints
-  app.post("/api/upload/image", authenticateToken, (req: AuthenticatedRequest, res) => {
-    uploadImage(req, res, (err) => {
+  // File Upload Endpoints (with media-specific rate limiting after auth)
+  app.post("/api/upload/image", authenticateToken, mediaUploadRateLimiter, (req: AuthenticatedRequest, res) => {
+    uploadImage(req as any, res, async (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
           if (err.code === 'LIMIT_FILE_SIZE') {
@@ -1152,8 +1537,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return errorResponse(res, 'No file uploaded', 400, 'NO_FILE');
       }
 
+      // SECURITY: Post-upload validation (SVG sanitization, virus scan)
+      try {
+        await postUploadSecurityValidation(req, res, () => {});
+      } catch (validationError: any) {
+        return errorResponse(res, validationError.message || 'File validation failed', 400, 'VALIDATION_FAILED');
+      }
+
       const fileUrl = `/uploads/${req.file.filename}`;
-      successResponse(res, { 
+      successResponse(res, {
         file: {
           filename: req.file.filename,
           originalName: req.file.originalname,
@@ -1165,8 +1557,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/upload/file", authenticateToken, (req: AuthenticatedRequest, res) => {
-    uploadSingle(req, res, (err) => {
+  app.post("/api/upload/file", fileUploadRateLimiter, authenticateToken, (req: AuthenticatedRequest, res) => {
+    uploadSingle(req as any, res, async (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
           if (err.code === 'LIMIT_FILE_SIZE') {
@@ -1181,8 +1573,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return errorResponse(res, 'No file uploaded', 400, 'NO_FILE');
       }
 
+      // SECURITY: Post-upload validation (SVG sanitization, virus scan)
+      try {
+        await postUploadSecurityValidation(req, res, () => {});
+      } catch (validationError: any) {
+        return errorResponse(res, validationError.message || 'File validation failed', 400, 'VALIDATION_FAILED');
+      }
+
       const fileUrl = `/uploads/${req.file.filename}`;
-      successResponse(res, { 
+      successResponse(res, {
         file: {
           filename: req.file.filename,
           originalName: req.file.originalname,
@@ -1194,8 +1593,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/upload/multiple", authenticateToken, (req: AuthenticatedRequest, res) => {
-    uploadMultiple(req, res, (err) => {
+  app.post("/api/upload/multiple", authenticateToken, mediaUploadRateLimiter, (req: AuthenticatedRequest, res) => {
+    uploadMultiple(req as any, res, async (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
           if (err.code === 'LIMIT_FILE_SIZE') {
@@ -1211,6 +1610,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!req.files || (req.files as Express.Multer.File[]).length === 0) {
         return errorResponse(res, 'No files uploaded', 400, 'NO_FILES');
+      }
+
+      // SECURITY: Post-upload validation (SVG sanitization, virus scan)
+      try {
+        await postUploadSecurityValidation(req, res, () => {});
+      } catch (validationError: any) {
+        return errorResponse(res, validationError.message || 'File validation failed', 400, 'VALIDATION_FAILED');
       }
 
       const files = (req.files as Express.Multer.File[]).map(file => ({
@@ -1233,16 +1639,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { status, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 20, 
+        parseInt(limit as string) || 20,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getOrders(req.user!.id, {
         status: status as string,
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching orders");
@@ -1256,41 +1662,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(404).json({ message: "Order not found" });
         return;
       }
-      
+
       // Check ownership or admin role
       if (order.userId !== req.user!.id && !['admin', 'moderator'].includes(req.user!.role)) {
         res.status(403).json({ message: "Unauthorized" });
         return;
       }
-      
+
       res.json({ order });
     } catch (error) {
       res.status(500).json({ message: "Error fetching order" });
     }
   });
 
-  app.post("/api/orders", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/orders", authenticateToken, idempotencyMiddleware, async (req: AuthenticatedRequest & { idempotencyKey?: string }, res) => {
     try {
       const { items, shippingAddress, paymentMethodId } = req.body;
-      
+      const idempotencyKey = req.idempotencyKey!;
+
       if (!items || !Array.isArray(items) || items.length === 0) {
         validationErrorResponse(res, [{ field: 'items', message: 'Order items are required' }]);
         return;
       }
-      
+
+      const existingOrder = await storage.getOrderByIdempotencyKey(idempotencyKey);
+      if (existingOrder) {
+        logger.info('Duplicate order request detected', { idempotencyKey: idempotencyKey.substring(0, 8) + '...', orderId: existingOrder.id });
+        res.setHeader('Idempotency-Key', idempotencyKey);
+        successResponse(res, { order: existingOrder, duplicate: true }, 'Order already exists (idempotent)', 200);
+        return;
+      }
+
       let totalAmount = 0;
       const orderItems = [];
-      
+
       for (const item of items) {
         const product = await storage.getProduct(item.productId);
         if (!product) {
           errorResponse(res, `Product not found: ${item.productId}`, 400, 'PRODUCT_NOT_FOUND');
           return;
         }
-        
+
         const itemTotal = parseFloat(product.price) * item.quantity;
         totalAmount += itemTotal;
-        
+
         orderItems.push({
           productId: item.productId,
           quantity: item.quantity,
@@ -1298,9 +1713,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           total: itemTotal
         });
       }
-      
+
       const userEmail = req.user!.email || 'user@example.com';
-      
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(totalAmount * 100),
         currency: "usd",
@@ -1322,7 +1737,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           total: totalAmount,
           shippingAddress,
           stripePaymentIntentId: paymentIntent.id,
-          status: 'pending'
+          status: 'pending',
+          idempotencyKey: idempotencyKey
         });
 
         let confirmedIntent;
@@ -1343,9 +1759,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.restoreInventory(order.id);
           await stripe.paymentIntents.cancel(paymentIntent.id).catch(() => {});
           errorResponse(
-            res, 
-            `Payment failed with status: ${confirmedIntent.status}`, 
-            400, 
+            res,
+            `Payment failed with status: ${confirmedIntent.status}`,
+            400,
             'PAYMENT_FAILED',
             { status: confirmedIntent.status }
           );
@@ -1356,26 +1772,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           await stripe.paymentIntents.cancel(paymentIntent.id);
         } catch (cancelError) {
-          console.error('Failed to cancel payment intent:', cancelError);
+          logger.error('Failed to cancel payment intent', cancelError instanceof Error ? cancelError : new Error(String(cancelError)));
         }
-        
+
         throw inventoryError;
       }
-      
+
+      res.setHeader('Idempotency-Key', idempotencyKey);
       successResponse(res, { order, clientSecret: paymentIntent.client_secret }, 'Order created successfully', 201);
     } catch (error: any) {
       console.error('Order creation error:', error);
-      
+
       if (error.message && error.message.includes('Insufficient inventory')) {
         errorResponse(res, error.message, 400, 'INSUFFICIENT_INVENTORY');
         return;
       }
-      
+
       if (error.message && error.message.includes('Product')) {
         errorResponse(res, error.message, 400, 'PRODUCT_ERROR');
         return;
       }
-      
+
       errorResponse(res, 'Failed to create order. Please try again.', 500, 'ORDER_CREATION_FAILED');
     }
   });
@@ -1384,24 +1801,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { status } = req.body;
       const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
-      
+
       if (!validStatuses.includes(status)) {
         validationErrorResponse(res, [{ field: 'status', message: 'Invalid order status' }]);
         return;
       }
-      
+
       const existingOrder = await storage.getOrder(req.params.id);
       if (!existingOrder) {
         notFoundResponse(res, 'Order');
         return;
       }
-      
+
       if (status === 'cancelled' || status === 'refunded') {
         if (existingOrder.status !== 'cancelled' && existingOrder.status !== 'refunded') {
           await storage.restoreInventory(req.params.id);
         }
       }
-      
+
       const order = await storage.updateOrderStatus(req.params.id, status);
       successResponse(res, { order }, `Order status updated to ${status}`);
     } catch (error: any) {
@@ -1410,14 +1827,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // MISSING FEATURE FIX: Order Refund Endpoint
+  app.post("/api/orders/:id/refund", authenticateToken, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { amount, reason, restoreInventory = true } = req.body;
+      const orderId = req.params.id;
+      
+      const order = await storage.getOrder(orderId);
+      if (!order) {
+        notFoundResponse(res, 'Order');
+        return;
+      }
+      
+      // Validate order can be refunded
+      if (order.paymentStatus === 'refunded') {
+        errorResponse(res, 'Order has already been fully refunded', 400, 'ALREADY_REFUNDED');
+        return;
+      }
+      
+      if (order.paymentStatus !== 'paid') {
+        errorResponse(res, 'Can only refund paid orders', 400, 'INVALID_ORDER_STATUS');
+        return;
+      }
+      
+      // Calculate refund amount
+      const maxRefundAmount = parseFloat(order.totalAmount as string);
+      const refundAmount = amount ? parseFloat(amount) : maxRefundAmount;
+      
+      if (refundAmount <= 0 || refundAmount > maxRefundAmount) {
+        validationErrorResponse(res, [{ field: 'amount', message: `Refund amount must be between $0 and $${maxRefundAmount}` }]);
+        return;
+      }
+      
+      // Process Stripe refund if payment was made through Stripe
+      let stripeRefundId: string | null = null;
+      if (order.stripePaymentIntentId && process.env.STRIPE_SECRET_KEY) {
+        try {
+          const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-08-27.basil' });
+          
+          const refund = await stripeClient.refunds.create({
+            payment_intent: order.stripePaymentIntentId,
+            amount: Math.round(refundAmount * 100), // Convert to cents
+            reason: reason as any || 'requested_by_customer',
+            metadata: {
+              orderId: order.id,
+              initiatedBy: req.user!.id,
+            },
+          });
+          
+          stripeRefundId = refund.id;
+          
+          logger.info('Stripe refund processed', {
+            orderId: order.id,
+            refundId: refund.id,
+            amount: refundAmount,
+            initiatedBy: req.user!.id,
+          });
+        } catch (stripeError: any) {
+          logger.error('Stripe refund failed', stripeError);
+          errorResponse(res, `Stripe refund failed: ${stripeError.message}`, 500, 'STRIPE_REFUND_FAILED');
+          return;
+        }
+      }
+      
+      // Restore inventory if requested
+      let restoredItems = null;
+      if (restoreInventory) {
+        await storage.restoreInventory(orderId);
+        restoredItems = order.items;
+      }
+      
+      // Create refund record
+      const refund = await storage.createRefund({
+        orderId: order.id,
+        stripeRefundId,
+        amount: refundAmount.toString(),
+        currency: order.currency || 'usd',
+        reason: reason || 'requested_by_customer',
+        status: stripeRefundId ? 'succeeded' : 'pending',
+        inventoryRestored: restoreInventory,
+        restoredItems: restoreInventory ? restoredItems : null,
+        initiatedBy: req.user!.id,
+        processedAt: new Date(),
+      });
+      
+      // Update order status
+      const isFullRefund = refundAmount >= maxRefundAmount;
+      const newPaymentStatus = isFullRefund ? 'refunded' : 'partial_refund';
+      await storage.updateOrderStatus(orderId, isFullRefund ? 'refunded' : order.status as string, newPaymentStatus);
+      
+      logger.info('Order refund created', {
+        orderId: order.id,
+        refundId: refund.id,
+        amount: refundAmount,
+        isFullRefund,
+        inventoryRestored: restoreInventory,
+        initiatedBy: req.user!.id,
+      });
+      
+      successResponse(res, { 
+        refund, 
+        order: { ...order, paymentStatus: newPaymentStatus },
+        inventoryRestored: restoreInventory,
+      }, isFullRefund ? 'Order fully refunded' : 'Partial refund processed', 201);
+    } catch (error: any) {
+      logger.error('Refund creation failed', error);
+      errorResponse(res, `Failed to process refund: ${error.message}`, 500, 'REFUND_FAILED');
+    }
+  });
+
   // Website Builder CRUD
   app.get("/api/websites", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
-      const { status } = req.query;
-      const websites = await storage.getWebsites(req.user!.id, { status });
-      res.json({ websites });
+      const { status, limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getWebsites(req.user!.id, {
+        status,
+        limit: pagination.limit,
+        offset: pagination.offset
+      });
+      
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
-      res.status(500).json({ message: "Error fetching websites" });
+      errorResponse(res, "Error fetching websites");
     }
   });
 
@@ -1500,30 +2036,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Blog/CMS Posts CRUD
-  app.get("/api/posts", optionalAuth, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/posts", cacheMiddleware(300), optionalAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { userId, status, type, search, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 20, 
+        parseInt(limit as string) || 20,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getPosts({
         userId: userId as string,
         status: status as string,
         type: type as string,
-        search: search as string,
+        search: sanitizeSearchInput(search as string),
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching posts");
     }
   });
 
-  app.get("/api/posts/:id", optionalAuth, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/posts/:id", cacheMiddleware(600), optionalAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const post = await storage.getPost(req.params.id);
       if (!post) {
@@ -1536,7 +2072,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/posts/slug/:slug", optionalAuth, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/posts/slug/:slug", cacheMiddleware(600), optionalAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const post = await storage.getPostBySlug(req.params.slug);
       if (!post) {
@@ -1552,12 +2088,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/posts", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const postData = { ...req.body, userId: req.user!.id };
-      
+
       if (!postData.slug && postData.title) {
         const baseSlug = slugify(postData.title);
         postData.slug = `${baseSlug}-${Date.now()}`;
       }
-      
+
       const post = await storage.createPost(postData);
       res.status(201).json({ post });
     } catch (error: any) {
@@ -1645,17 +2181,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { search, limit, offset, includePrivate = false } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 20, 
+        parseInt(limit as string) || 20,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getCommunities({
-        search: search as string,
+        search: sanitizeSearchInput(search as string),
         limit: pagination.limit,
         offset: pagination.offset,
         includePrivate: includePrivate === 'true'
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching communities");
@@ -1678,12 +2214,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/communities", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const communityData = { ...req.body, ownerId: req.user!.id };
-      
+
       if (!communityData.slug && communityData.name) {
         const baseSlug = slugify(communityData.name);
         communityData.slug = `${baseSlug}-${Date.now()}`;
       }
-      
+
       const community = await storage.createCommunity(communityData);
       res.status(201).json({ community });
     } catch (error: any) {
@@ -1737,17 +2273,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { communityId, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 50, 
+        parseInt(limit as string) || 50,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getMessages({
         userId: req.user!.id,
         communityId: communityId as string,
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching messages");
@@ -1766,11 +2302,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Marketing Campaigns
   app.get("/api/campaigns", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
-      const { status } = req.query;
-      const campaigns = await storage.getCampaigns(req.user!.id, { status });
-      res.json({ campaigns });
+      const { status, limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getCampaigns(req.user!.id, {
+        status,
+        limit: pagination.limit,
+        offset: pagination.offset
+      });
+      
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
-      res.status(500).json({ message: "Error fetching campaigns" });
+      errorResponse(res, "Error fetching campaigns");
     }
   });
 
@@ -1810,17 +2356,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { status, source, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 50, 
+        parseInt(limit as string) || 50,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getLeads(req.user!.id, {
-        status, 
+        status,
         source,
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching leads");
@@ -1850,17 +2396,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { category, search, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 20, 
+        parseInt(limit as string) || 20,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getPlugins({
         category: category as string,
-        search: search as string,
+        search: sanitizeSearchInput(search as string),
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching plugins");
@@ -1926,17 +2472,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { type, isRead, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 50, 
+        parseInt(limit as string) || 50,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getNotifications(req.user!.id, {
         type: type as string,
         isRead: isRead === 'true' ? true : isRead === 'false' ? false : undefined,
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching notifications");
@@ -1975,16 +2521,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { mimeType, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 50, 
+        parseInt(limit as string) || 50,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getMedia(req.user!.id, {
         mimeType: mimeType as string,
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching media");
@@ -2023,10 +2569,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId, action, resource, limit, offset } = req.query;
       const pagination = calculatePagination(
-        parseInt(limit as string) || 100, 
+        parseInt(limit as string) || 100,
         parseInt(offset as string) || 0
       );
-      
+
       const { data, totalCount } = await storage.getAuditLogs({
         userId: userId as string,
         action: action as string,
@@ -2034,7 +2580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit: pagination.limit,
         offset: pagination.offset
       });
-      
+
       paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
     } catch (error) {
       errorResponse(res, "Error fetching audit logs");
@@ -2045,7 +2591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/analytics/stats", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const userId = req.user!.id;
-      
+
       const [productsResult, ordersResult, postsResult, websites] = await Promise.all([
         storage.getProducts({ limit: 1000, offset: 0 }),
         storage.getOrders(userId, { limit: 1000, offset: 0 }),
@@ -2056,14 +2602,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalRevenue = ordersResult.data
         .filter(o => o.status === 'delivered' || o.status === 'paid')
         .reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
-      
+
       const activeUsers = await storage.getUsersCount();
-      
+
       res.json({
         revenue: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         users: activeUsers.toString(),
         orders: ordersResult.data.length.toString(),
-        pages: websites.length.toString(),
+        pages: websites.data.length.toString(),
         growth: "+0%",
         activeUsers: Math.floor(activeUsers * 0.3).toString()
       });
@@ -2079,6 +2625,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ activities });
     } catch (error) {
       res.status(500).json({ message: "Error fetching activity" });
+    }
+  });
+
+  app.use('/api/password-reset', emailVerificationRouter);
+  app.use('/api/admin', adminRouter);
+
+  // PHASE 1 - ISSUE #17: Secure metrics endpoint with authentication
+  // MEDIUM FIX #14: Add circuit breaker state to metrics
+  app.get('/metrics', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    const apiKey = req.headers['x-api-key'] as string;
+    
+    // Check for API key authentication
+    if (apiKey) {
+      const validApiKey = process.env.METRICS_API_KEY;
+      if (!validApiKey || apiKey !== validApiKey) {
+        res.status(401).json({ error: 'Invalid API key' });
+        return;
+      }
+    }
+    // Check for Bearer token authentication (admin role)
+    else if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const verification = verifyToken(token);
+      if (!verification) {
+        res.status(401).json({ error: 'Invalid token' });
+        return;
+      }
+      const user = await storage.getUser(verification.userId);
+      if (!user || user.role !== 'admin') {
+        res.status(403).json({ error: 'Admin access required' });
+        return;
+      }
+    } 
+    // No authentication provided
+    else {
+      res.status(401).json({ error: 'Authentication required. Provide X-API-Key header or Bearer token with admin role.' });
+      return;
+    }
+    
+    // Add circuit breaker metrics
+    const { dbCircuitBreaker } = await import("./db");
+    const cbStats = dbCircuitBreaker.getStats();
+    
+    res.set('Content-Type', metricsRegister.contentType);
+    const metrics = await metricsRegister.metrics();
+    const circuitBreakerMetrics = `
+# HELP circuit_breaker_state Database circuit breaker state (0=CLOSED, 1=HALF_OPEN, 2=OPEN)
+# TYPE circuit_breaker_state gauge
+circuit_breaker_state{service="database"} ${cbStats.state === 'CLOSED' ? 0 : cbStats.state === 'HALF_OPEN' ? 1 : 2}
+
+# HELP circuit_breaker_failures Current circuit breaker failure count
+# TYPE circuit_breaker_failures gauge
+circuit_breaker_failures{service="database"} ${cbStats.failures}
+
+# HELP circuit_breaker_threshold Circuit breaker failure threshold
+# TYPE circuit_breaker_threshold gauge
+circuit_breaker_threshold{service="database"} ${cbStats.threshold}
+`;
+    res.end(metrics + circuitBreakerMetrics);
+  });
+
+  // Health check endpoint (with permissive rate limiting for monitoring)
+  app.get("/api/health", healthCheckRateLimiter, async (req, res) => {
+    const HEALTH_CHECK_TIMEOUT = 10000; // 10 second timeout
+    
+    const healthCheckPromise = (async () => {
+      const { checkDatabaseHealth, getDatabaseStats } = await import("./db");
+      const { queryMonitor } = await import("./middleware/query-monitor");
+      const dbHealth = await checkDatabaseHealth();
+      const dbStats = getDatabaseStats();
+      const queryMetrics = queryMonitor.getMetrics();
+      
+      // PHASE 1 - ISSUE #14: Integrate Redis health check
+      const { checkRedisHealth } = await import("./utils/redis-health");
+      const redisHealth = await checkRedisHealth();
+
+      // PHASE 5.5: Integrate Stripe and OpenAI health checks
+      const { checkStripeHealth } = await import("./utils/stripe-health");
+      const { checkOpenAIHealth } = await import("./utils/openai-health");
+      const stripeHealth = await checkStripeHealth();
+      const openaiHealth = await checkOpenAIHealth();
+
+      const allHealthy = dbHealth.healthy && redisHealth.healthy && stripeHealth.healthy && openaiHealth.healthy;
+      return {
+        status: allHealthy ? "ok" : "degraded",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development',
+        database: {
+          healthy: dbHealth.healthy,
+          latency: dbHealth.latency,
+          error: dbHealth.error,
+          pool: {
+            total: dbStats.totalConnections,
+            idle: dbStats.idleConnections,
+            waiting: dbStats.waitingClients,
+            max: dbStats.poolMax,
+          },
+          queries: {
+            total: queryMetrics.totalQueries,
+            slow: queryMetrics.slowQueries,
+            failed: queryMetrics.failedQueries,
+            averageTime: Math.round(queryMetrics.averageQueryTime),
+          }
+        },
+        redis: {
+          healthy: redisHealth.healthy,
+          latency: redisHealth.latency,
+          error: redisHealth.error
+        },
+        stripe: {
+          healthy: stripeHealth.healthy,
+          latency: stripeHealth.latency,
+          error: stripeHealth.error
+        },
+        openai: {
+          healthy: openaiHealth.healthy,
+          latency: openaiHealth.latency,
+          error: openaiHealth.error
+        }
+      };
+    })();
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Health check timeout')), HEALTH_CHECK_TIMEOUT);
+    });
+
+    try {
+      const health = await Promise.race([healthCheckPromise, timeoutPromise]);
+      const allHealthy = health.status === "ok";
+      res.status(allHealthy ? 200 : 503).json(health);
+    } catch (error: any) {
+      res.status(503).json({
+        status: "timeout",
+        timestamp: new Date().toISOString(),
+        error: error.message || "Health check timed out",
+        uptime: process.uptime()
+      });
     }
   });
 
