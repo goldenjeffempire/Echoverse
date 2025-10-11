@@ -1,0 +1,43 @@
+# EchoVerse - Production Robots.txt
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Disallow admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard/settings/
+Disallow: /checkout/
+Disallow: /payment/
+Disallow: /account/
+
+# Disallow dynamic/user-generated content paths
+Disallow: /preview/
+Disallow: /draft/
+Disallow: /*?*sessionId=*
+Disallow: /*?*token=*
+
+# Allow important pages
+Allow: /
+Allow: /about
+Allow: /pricing
+Allow: /features
+Allow: /blog
+Allow: /help
+
+# Sitemap
+Sitemap: https://echoverse.com/sitemap.xml
+Sitemap: https://echoverse.com/sitemap-blog.xml
+Sitemap: https://echoverse.com/sitemap-marketplace.xml
+
+# Crawl-delay (optional, for specific bots)
+# User-agent: Googlebot
+# Crawl-delay: 1
+
+# Common bots (allow but rate limit)
+User-agent: Baiduspider
+Crawl-delay: 2
+
+User-agent: Yandex
+Crawl-delay: 2
