@@ -38,229 +38,175 @@ import MarketingPage from "@/pages/marketing";
 import MarketplacePage from "@/pages/marketplace";
 import UsersPage from "@/pages/users";
 import SettingsPage from "@/pages/settings";
-
 /**
  * CSRF Bootstrap Hook with Atomic Initialization
- * 
+ *
  * Uses the centralized CSRF manager to:
  * - Prevent race conditions with promise-based locking
  * - Implement atomic initialization
  * - Provide proper error recovery
  * - Handle retry logic with exponential backoff
- * 
+ *
  * @returns {object} - Object with csrfReady and csrfError states
  */
 function useCSRFBootstrap() {
-  const [csrfReady, setCSRFReady] = React.useState(false);
-  const [csrfError, setCSRFError] = React.useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function initializeCSRF() {
-      try {
-        const success = await csrfManager.initialize();
-        
-        if (!mounted) return;
-
-        if (success) {
-          setCSRFReady(true);
-          setCSRFError(null);
-        } else {
-          setCSRFError('Failed to initialize CSRF protection. Please refresh the page.');
+    const [csrfReady, setCSRFReady] = React.useState(false);
+    const [csrfError, setCSRFError] = React.useState(null);
+    useEffect(() => {
+        let mounted = true;
+        async function initializeCSRF() {
+            try {
+                const success = await csrfManager.initialize();
+                if (!mounted)
+                    return;
+                if (success) {
+                    setCSRFReady(true);
+                    setCSRFError(null);
+                }
+                else {
+                    setCSRFError('Failed to initialize CSRF protection. Please refresh the page.');
+                }
+            }
+            catch (error) {
+                console.error('[CSRF] Bootstrap initialization failed:', error);
+                if (mounted) {
+                    setCSRFError('Failed to initialize CSRF protection. Please refresh the page.');
+                }
+            }
         }
-      } catch (error) {
-        console.error('[CSRF] Bootstrap initialization failed:', error);
-        if (mounted) {
-          setCSRFError('Failed to initialize CSRF protection. Please refresh the page.');
-        }
-      }
-    }
-
-    initializeCSRF();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  return { csrfReady, csrfError };
+        initializeCSRF();
+        return () => {
+            mounted = false;
+        };
+    }, []);
+    return { csrfReady, csrfError };
 }
-
 function Router() {
-  return (
-    <Switch>
+    return (<Switch>
       <Route path="/">
-        {() => (
-          <RouteErrorBoundary routeName="Home">
+        {() => (<RouteErrorBoundary routeName="Home">
             <HomePage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/login">
-        {() => (
-          <RouteErrorBoundary routeName="Login">
+        {() => (<RouteErrorBoundary routeName="Login">
             <LoginPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/register">
-        {() => (
-          <RouteErrorBoundary routeName="Register">
+        {() => (<RouteErrorBoundary routeName="Register">
             <RegisterPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/reset-password">
-        {() => (
-          <RouteErrorBoundary routeName="Reset Password">
+        {() => (<RouteErrorBoundary routeName="Reset Password">
             <ResetPasswordPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/dashboard">
-        {() => (
-          <RouteErrorBoundary routeName="Dashboard">
+        {() => (<RouteErrorBoundary routeName="Dashboard">
             <DashboardPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/ai-builder">
-        {() => (
-          <RouteErrorBoundary routeName="AI Builder">
+        {() => (<RouteErrorBoundary routeName="AI Builder">
             <AIBuilderPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/builder">
-        {() => (
-          <RouteErrorBoundary routeName="Website Builder">
+        {() => (<RouteErrorBoundary routeName="Website Builder">
             <WebsiteBuilder />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/ecommerce">
-        {() => (
-          <RouteErrorBoundary routeName="E-Commerce">
+        {() => (<RouteErrorBoundary routeName="E-Commerce">
             <EcommercePage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/cms">
-        {() => (
-          <RouteErrorBoundary routeName="CMS">
+        {() => (<RouteErrorBoundary routeName="CMS">
             <CmsPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/community">
-        {() => (
-          <RouteErrorBoundary routeName="Community">
+        {() => (<RouteErrorBoundary routeName="Community">
             <CommunityPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/marketing">
-        {() => (
-          <RouteErrorBoundary routeName="Marketing">
+        {() => (<RouteErrorBoundary routeName="Marketing">
             <MarketingPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/marketplace">
-        {() => (
-          <RouteErrorBoundary routeName="Marketplace">
+        {() => (<RouteErrorBoundary routeName="Marketplace">
             <MarketplacePage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/users">
-        {() => (
-          <RouteErrorBoundary routeName="Users">
+        {() => (<RouteErrorBoundary routeName="Users">
             <UsersPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/settings">
-        {() => (
-          <RouteErrorBoundary routeName="Settings">
+        {() => (<RouteErrorBoundary routeName="Settings">
             <SettingsPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/profile">
-        {() => (
-          <RouteErrorBoundary routeName="Profile">
+        {() => (<RouteErrorBoundary routeName="Profile">
             <ProfilePage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/orders">
-        {() => (
-          <RouteErrorBoundary routeName="Orders">
+        {() => (<RouteErrorBoundary routeName="Orders">
             <OrdersPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/products">
-        {() => (
-          <RouteErrorBoundary routeName="Products">
+        {() => (<RouteErrorBoundary routeName="Products">
             <ProductsPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/checkout">
-        {() => (
-          <RouteErrorBoundary routeName="Checkout">
+        {() => (<RouteErrorBoundary routeName="Checkout">
             <CheckoutPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/search">
-        {() => (
-          <RouteErrorBoundary routeName="Search">
+        {() => (<RouteErrorBoundary routeName="Search">
             <SearchPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/terms">
-        {() => (
-          <RouteErrorBoundary routeName="Terms of Service">
+        {() => (<RouteErrorBoundary routeName="Terms of Service">
             <TermsPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
       <Route path="/privacy">
-        {() => (
-          <RouteErrorBoundary routeName="Privacy Policy">
+        {() => (<RouteErrorBoundary routeName="Privacy Policy">
             <PrivacyPage />
-          </RouteErrorBoundary>
-        )}
+          </RouteErrorBoundary>)}
       </Route>
-      <Route component={NotFound} />
-    </Switch>
-  );
+      <Route component={NotFound}/>
+    </Switch>);
 }
-
 function AppContent() {
-  const [location] = useLocation();
-  const isFullPageRoute = ['/', '/login', '/register', '/reset-password', '/terms', '/privacy'].includes(location);
-  const style = {
-    "--sidebar-width": "20rem",
-    "--sidebar-width-icon": "4rem",
-  };
-
-  if (isFullPageRoute) {
-    return <Router />;
-  }
-
-  return (
-    <SidebarProvider style={style as React.CSSProperties}>
+    const [location] = useLocation();
+    const isFullPageRoute = ['/', '/login', '/register', '/reset-password', '/terms', '/privacy'].includes(location);
+    const style = {
+        "--sidebar-width": "20rem",
+        "--sidebar-width-icon": "4rem",
+    };
+    if (isFullPageRoute) {
+        return <Router />;
+    }
+    return (<SidebarProvider style={style}>
       <div className="flex h-screen w-full">
         <AppSidebar />
         <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between p-4 border-b">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <SidebarTrigger data-testid="button-sidebar-toggle"/>
             <ThemeToggle />
           </header>
           <main className="flex-1 overflow-auto p-6">
@@ -268,47 +214,34 @@ function AppContent() {
           </main>
         </div>
       </div>
-    </SidebarProvider>
-  );
+    </SidebarProvider>);
 }
-
 function App() {
-  // Bootstrap CSRF token verification on app mount and wait for ready
-  const { csrfReady, csrfError } = useCSRFBootstrap();
-
-  // Show loading state while CSRF initializes
-  if (!csrfReady && !csrfError) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
+    // Bootstrap CSRF token verification on app mount and wait for ready
+    const { csrfReady, csrfError } = useCSRFBootstrap();
+    // Show loading state while CSRF initializes
+    if (!csrfReady && !csrfError) {
+        return (<div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-muted-foreground">Initializing security...</p>
         </div>
-      </div>
-    );
-  }
-
-  // Show error state if CSRF failed
-  if (csrfError) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
+      </div>);
+    }
+    // Show error state if CSRF failed
+    if (csrfError) {
+        return (<div className="flex items-center justify-center min-h-screen">
         <div className="text-center max-w-md p-6">
           <div className="text-red-500 text-5xl mb-4">⚠️</div>
           <h2 className="text-2xl font-bold mb-2">Security Initialization Failed</h2>
           <p className="text-muted-foreground mb-4">{csrfError}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
             Reload Page
           </button>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <ErrorBoundary>
+      </div>);
+    }
+    return (<ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <WebSocketErrorBoundary>
           <AuthProvider>
@@ -324,8 +257,6 @@ function App() {
           </AuthProvider>
         </WebSocketErrorBoundary>
       </QueryClientProvider>
-    </ErrorBoundary>
-  );
+    </ErrorBoundary>);
 }
-
 export default App;

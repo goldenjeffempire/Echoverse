@@ -28,7 +28,7 @@ interface Product {
   sku: string;
   inventory: number;
   isActive: boolean;
-  metadata: any;
+  metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,8 +40,8 @@ interface Order {
   status: string;
   total: number;
   currency: string;
-  items: any[];
-  shippingAddress: any;
+  items: Array<Record<string, unknown>>;
+  shippingAddress: Record<string, unknown>;
   createdAt: string;
 }
 

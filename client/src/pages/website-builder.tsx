@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DOMPurify from 'isomorphic-dompurify';
 import {
   DndContext,
   closestCenter,
@@ -44,7 +45,7 @@ interface WebsiteData {
     route: string;
     title: string;
     content: string;
-    components: any[];
+    components: Component[];
     seo: {
       title: string;
       description: string;
@@ -77,7 +78,7 @@ interface Component {
   name: string;
   html: string;
   css: string;
-  props: any;
+  props: Record<string, unknown>;
   preview: string;
 }
 
@@ -644,7 +645,14 @@ export default function WebsiteBuilder() {
                         <div 
                           className="prose max-w-none mb-6"
                           dangerouslySetInnerHTML={{ 
-                            __html: websiteData.pages.find(p => p.id === selectedPage)?.content || '<p>No content generated yet</p>' 
+                            __html: DOMPurify.sanitize(
+                              websiteData.pages.find(p => p.id === selectedPage)?.content || '<p>No content generated yet</p>',
+                              {
+                                ALLOWED_TAGS: ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'a', 'strong', 'em', 'img', 'blockquote', 'code', 'pre', 'br', 'div', 'span'],
+                                ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id'],
+                                ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+                              }
+                            )
                           }}
                         />
                       </div>
