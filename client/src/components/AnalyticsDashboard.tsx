@@ -22,7 +22,7 @@ interface AnalyticsMetric {
 }
 
 interface ChartDataPoint {
-  date: string;
+  date?: string;
   value: number;
   label?: string;
   [key: string]: any;
@@ -40,73 +40,40 @@ export function AnalyticsDashboard({
   onRefresh 
 }: AnalyticsDashboardProps) {
   const [timeRange, setTimeRange] = useState(dateRange);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // Mock data - In production, fetch from API
-  const metrics: AnalyticsMetric[] = [
-    {
-      label: 'Total Revenue',
-      value: '$45,231',
-      change: 12.5,
-      trend: 'up',
-      icon: DollarSign,
-    },
-    {
-      label: 'Total Orders',
-      value: '1,234',
-      change: 8.2,
-      trend: 'up',
-      icon: ShoppingCart,
-    },
-    {
-      label: 'Active Users',
-      value: '8,429',
-      change: -3.1,
-      trend: 'down',
-      icon: Users,
-    },
-    {
-      label: 'Page Views',
-      value: '125.6K',
-      change: 15.3,
-      trend: 'up',
-      icon: Eye,
-    },
-  ];
+  const [isLoading, setIsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<AnalyticsMetric[]>([]);
+  const [revenueData, setRevenueData] = useState<ChartDataPoint[]>([]);
+  const [trafficSourcesData, setTrafficSourcesData] = useState<ChartDataPoint[]>([]);
+  const [topProductsData, setTopProductsData] = useState<ChartDataPoint[]>([]);
+  const [conversionFunnelData, setConversionFunnelData] = useState<ChartDataPoint[]>([]);
 
-  const revenueData: ChartDataPoint[] = [
-    { date: '2024-10-01', value: 4200, orders: 45 },
-    { date: '2024-10-05', value: 5100, orders: 52 },
-    { date: '2024-10-10', value: 4800, orders: 48 },
-    { date: '2024-10-15', value: 6200, orders: 61 },
-    { date: '2024-10-20', value: 7100, orders: 68 },
-    { date: '2024-10-25', value: 8300, orders: 78 },
-    { date: '2024-10-30', value: 9500, orders: 89 },
-  ];
-
-  const trafficSourcesData: ChartDataPoint[] = [
-    { label: 'Direct', value: 4200 },
-    { label: 'Social Media', value: 3100 },
-    { label: 'Search Engines', value: 5800 },
-    { label: 'Referral', value: 2400 },
-    { label: 'Email', value: 1900 },
-  ];
-
-  const topProductsData: ChartDataPoint[] = [
-    { label: 'Product A', value: 850, revenue: 42500 },
-    { label: 'Product B', value: 620, revenue: 31000 },
-    { label: 'Product C', value: 490, revenue: 24500 },
-    { label: 'Product D', value: 380, revenue: 19000 },
-    { label: 'Product E', value: 290, revenue: 14500 },
-  ];
-
-  const conversionFunnelData: ChartDataPoint[] = [
-    { stage: 'Visits', value: 10000, percentage: 100 },
-    { stage: 'Product Views', value: 6500, percentage: 65 },
-    { stage: 'Add to Cart', value: 3200, percentage: 32 },
-    { stage: 'Checkout', value: 1800, percentage: 18 },
-    { stage: 'Purchase', value: 1234, percentage: 12.34 },
-  ];
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams({ 
+          range: timeRange,
+          ...(userId && { userId: userId.toString() })
+        });
+        
+        const response = await fetch(`/api/analytics?${params}`);
+        if (response.ok) {
+          const data = await response.json();
+          setMetrics(data.metrics || []);
+          setRevenueData(data.revenueData || []);
+          setTrafficSourcesData(data.trafficSources || []);
+          setTopProductsData(data.topProducts || []);
+          setConversionFunnelData(data.conversionFunnel || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch analytics:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchAnalytics();
+  }, [timeRange, userId]);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -144,7 +111,7 @@ export function AnalyticsDashboard({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={timeRange} onValueChange={setTimeRange}>
+          <Select value={timeRange} onValueChange={(value) => setTimeRange(value as typeof timeRange)}>
             <SelectTrigger className="w-[180px]">
               <Calendar className="mr-2 h-4 w-4" />
               <SelectValue />
