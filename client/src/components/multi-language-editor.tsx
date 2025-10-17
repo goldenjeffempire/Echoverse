@@ -144,7 +144,7 @@ export function MultiLanguageEditor() {
         return
       }
 
-      const response = await apiClient.post('/api/ai/translate', {
+      const response = await apiClient.post<{ translation: { [key: string]: string } }>('/api/ai/translate', {
         content: baseTranslation.content,
         sourceLanguage: item.baseLanguage,
         targetLanguage

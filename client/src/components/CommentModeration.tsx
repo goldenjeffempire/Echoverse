@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { formatDistance } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useEffect } from 'react';
 
 interface Comment {
   id: number;
@@ -49,40 +50,26 @@ interface CommentModerationProps {
 }
 
 export function CommentModeration({ className }: CommentModerationProps) {
-  const [comments, setComments] = useState<Comment[]>([
-    {
-      id: 1,
-      author: {
-        id: 101,
-        name: 'John Doe',
-        avatar: '/avatars/john.jpg',
-        email: 'john@example.com',
-      },
-      content: 'This is a great article! I learned a lot from it.',
-      postTitle: 'Getting Started with React',
-      postId: 1,
-      status: 'pending',
-      createdAt: new Date(Date.now() - 1000 * 60 * 30),
-      flagCount: 0,
-      spamScore: 0.12,
-    },
-    {
-      id: 2,
-      author: {
-        id: 102,
-        name: 'Jane Smith',
-        avatar: '/avatars/jane.jpg',
-        email: 'jane@example.com',
-      },
-      content: 'Click here for FREE PRIZES!!! www.spam-site.com',
-      postTitle: 'TypeScript Best Practices',
-      postId: 2,
-      status: 'pending',
-      createdAt: new Date(Date.now() - 1000 * 60 * 45),
-      flagCount: 3,
-      spamScore: 0.89,
-    },
-  ]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      try {
+        const response = await fetch('/api/comments/moderation');
+        if (response.ok) {
+          const data = await response.json();
+          setComments(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch comments:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchComments();
+  }, []);
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedComment, setSelectedComment] = useState<Comment | null>(null);
