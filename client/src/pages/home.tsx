@@ -1,4 +1,4 @@
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform, useSpring, useInView } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ArrowRight, Sparkles, Zap, Globe, ShoppingCart, MessageSquare, TrendingUp, Puzzle, Shield, Smartphone, Check, Star, Users, Rocket, BarChart, Code, Layers, Cpu, Wand2, Database, Cloud, Lock, Palette, BookOpen, Award, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import Navbar from "@/components/Navbar";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 60 },
@@ -292,60 +293,24 @@ export default function HomePage() {
         </motion.div>
       </div>
 
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center space-x-3"
-            >
-              <motion.div 
-                className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                transition={{ type: "spring", stiffness: 400 }}
-              >
-                <Sparkles className="w-6 h-6 text-white" />
-              </motion.div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                EchoVerse
-              </span>
-            </motion.div>
-            
-            <motion.div 
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center space-x-4"
-            >
-              {user ? (
-                <>
-                  <Button variant="ghost" onClick={handleDashboard} className="hover:bg-blue-50 dark:hover:bg-blue-950">Dashboard</Button>
-                  <Button 
-                    onClick={handleGetStarted}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all"
-                  >
-                    Get Started
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="ghost" onClick={() => setLocation('/login')} className="hover:bg-blue-50 dark:hover:bg-blue-950">Sign In</Button>
-                  <Button 
-                    onClick={() => setLocation('/register')}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all"
-                  >
-                    Get Started
-                  </Button>
-                </>
-              )}
-            </motion.div>
-          </div>
-        </div>
-      </nav>
+      {/* Professional Navbar */}
+      <Navbar />
 
-      {/* Hero Section - Expanded */}
-      <section className="relative pt-32 pb-32 px-4 sm:px-6 lg:px-8">
+      {/* Hero Section - Visually Enhanced with Background Image */}
+      <section className="relative pt-32 pb-32 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        {/* Hero Background Image with Overlay */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-blue-900/90 to-purple-900/95 dark:from-slate-950/95 dark:via-blue-950/90 dark:to-purple-950/95 z-10" />
+          <motion.img 
+            src="/attached_assets/stock_images/futuristic_ai_techno_78868d22.jpg"
+            alt="AI Technology Workspace"
+            className="w-full h-full object-cover opacity-40"
+            initial={{ scale: 1.1 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+          />
+        </div>
+
         <div className="max-w-7xl mx-auto">
           <div className="text-center relative z-10">
             <motion.div
@@ -358,7 +323,7 @@ export default function HomePage() {
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2, duration: 0.5 }}
               >
-                <Badge className="mb-6 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 hover:from-blue-200 hover:to-purple-200 dark:from-blue-900 dark:to-purple-900 dark:text-blue-300 px-6 py-2 text-sm font-medium shadow-lg">
+                <Badge className="mb-6 bg-gradient-to-r from-blue-400/30 to-purple-400/30 backdrop-blur-sm text-blue-100 border border-blue-400/50 px-6 py-2 text-sm font-medium shadow-lg">
                   <Zap className="w-4 h-4 mr-2" />
                   Powered by Advanced AI Technology
                 </Badge>
@@ -370,12 +335,12 @@ export default function HomePage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.7 }}
               >
-                <span className="bg-gradient-to-r from-slate-900 via-blue-900 to-purple-900 dark:from-white dark:via-blue-100 dark:to-purple-100 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-white via-blue-100 to-purple-100 bg-clip-text text-transparent">
                   Build, Sell, & Scale
                 </span>
                 <br />
                 <motion.span 
-                  className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent inline-block"
+                  className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent inline-block"
                   animate={{ 
                     backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
                   }}
@@ -391,7 +356,7 @@ export default function HomePage() {
               </motion.h1>
               
               <motion.p 
-                className="text-xl md:text-2xl text-slate-600 dark:text-slate-300 mb-10 max-w-4xl mx-auto leading-relaxed"
+                className="text-xl md:text-2xl text-slate-200 dark:text-slate-200 mb-10 max-w-4xl mx-auto leading-relaxed"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5, duration: 0.7 }}
@@ -439,18 +404,18 @@ export default function HomePage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1, duration: 0.6 }}
-                className="flex flex-wrap justify-center gap-8 text-sm text-slate-600 dark:text-slate-400"
+                className="flex flex-wrap justify-center gap-8 text-sm text-slate-200"
               >
                 <div className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-5 h-5 text-green-400" />
                   <span>No credit card required</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-5 h-5 text-green-400" />
                   <span>14-day free trial</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check className="w-5 h-5 text-green-500" />
+                  <Check className="w-5 h-5 text-green-400" />
                   <span>Cancel anytime</span>
                 </div>
               </motion.div>
@@ -501,6 +466,70 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Visual Showcase Section - NEW */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.8 }}
+        className="py-20 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-900 relative overflow-hidden"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+            >
+              <Badge className="mb-4 bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                <Sparkles className="w-3 h-3 mr-1" />
+                AI-Powered Creation
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-slate-900 to-blue-900 dark:from-white dark:to-blue-100 bg-clip-text text-transparent">
+                Transform Ideas Into Reality in Seconds
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                Watch as our advanced AI understands your vision and creates stunning, production-ready websites complete with content, design, and functionality—all without writing a single line of code.
+              </p>
+              <div className="space-y-4">
+                {['Natural language input', 'Instant generation', 'Fully customizable', 'Production-ready code'].map((item, idx) => (
+                  <motion.div 
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.3 + (idx * 0.1) }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-slate-700 dark:text-slate-200 font-medium">{item}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.4 }}
+              className="relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-3xl blur-3xl" />
+              <motion.img
+                src="/attached_assets/stock_images/modern_website_build_48e9aeb4.jpg"
+                alt="Website Builder Interface"
+                className="relative rounded-2xl shadow-2xl w-full h-auto"
+                whileHover={{ scale: 1.02 }}
+                transition={{ duration: 0.3 }}
+              />
+            </motion.div>
+          </div>
+        </div>
+      </motion.section>
+
       {/* Stats Section - Enhanced */}
       <motion.section 
         initial={{ opacity: 0 }}
@@ -539,8 +568,75 @@ export default function HomePage() {
         </div>
       </motion.section>
 
-      {/* AI Features Section - New */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 relative">
+      {/* Marketing Analytics Visual Showcase - NEW */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+            >
+              <Badge className="mb-4 bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                <BarChart className="w-3 h-3 mr-1" />
+                Marketing & Analytics
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-slate-900 to-orange-900 dark:from-white dark:to-orange-100 bg-clip-text text-transparent">
+                Data-Driven Growth
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                Make smarter decisions with powerful analytics and marketing tools. Track every metric, optimize conversions, and scale your business with data-backed insights.
+              </p>
+              <div className="space-y-4">
+                {[
+                  { icon: TrendingUp, text: 'Real-time analytics dashboard' },
+                  { icon: Users, text: 'Customer behavior tracking' },
+                  { icon: BarChart, text: 'A/B testing & optimization' },
+                  { icon: Rocket, text: 'Marketing automation' }
+                ].map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.3 + (idx * 0.1) }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center flex-shrink-0">
+                      <item.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-slate-700 dark:text-slate-200 font-medium">{item.text}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/20 to-red-600/20 rounded-3xl blur-3xl" />
+              <motion.img
+                src="/attached_assets/stock_images/digital_marketing_da_468a0a44.jpg"
+                alt="Marketing Analytics Dashboard"
+                className="relative rounded-2xl shadow-2xl w-full h-auto"
+                whileHover={{ scale: 1.02 }}
+                transition={{ duration: 0.3 }}
+              />
+            </motion.div>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* AI Features Showcase - ENHANCED WITH VISUALS */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 relative bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-blue-950/30 dark:via-purple-950/30 dark:to-pink-950/30">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -550,22 +646,23 @@ export default function HomePage() {
           >
             <Badge className="mb-4 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
               <Cpu className="w-3 h-3 mr-1" />
-              AI-Powered
+              AI-Powered Platform
             </Badge>
             <h2 className="text-5xl md:text-6xl font-black mb-6 bg-gradient-to-r from-slate-900 to-purple-900 dark:from-white dark:to-purple-100 bg-clip-text text-transparent">
-              Intelligence Built In
+              See What Our AI Can Do
             </h2>
             <p className="text-xl text-slate-600 dark:text-slate-300 max-w-3xl mx-auto">
-              Our advanced AI doesn't just build websites—it understands your vision and creates experiences
+              Advanced artificial intelligence that transforms your ideas into reality—no coding required
             </p>
           </motion.div>
 
+          {/* AI Feature Grid with Visuals */}
           <motion.div 
             variants={stagger}
             initial="initial"
             whileInView="animate"
             viewport={{ once: true }}
-            className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16"
           >
             {aiFeatures.map((feature, index) => (
               <motion.div key={index} variants={fadeInUp}>
@@ -573,9 +670,9 @@ export default function HomePage() {
                   whileHover={{ y: -8, scale: 1.02 }}
                   className="h-full"
                 >
-                  <Card className="h-full border-0 bg-gradient-to-br from-white to-blue-50 dark:from-slate-800 dark:to-blue-950 shadow-xl hover:shadow-2xl transition-all">
+                  <Card className="h-full border-0 bg-white dark:bg-slate-800 shadow-xl hover:shadow-2xl transition-all overflow-hidden group">
                     <CardContent className="p-6">
-                      <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 shadow-lg">
+                      <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform">
                         <feature.icon className="w-7 h-7 text-white" />
                       </div>
                       <h3 className="text-lg font-bold mb-2 text-slate-900 dark:text-white">
@@ -590,11 +687,120 @@ export default function HomePage() {
               </motion.div>
             ))}
           </motion.div>
+
+          {/* AI Visual Demonstration */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="grid md:grid-cols-2 gap-8 mb-16"
+          >
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="relative group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-600/20 rounded-2xl blur-2xl group-hover:blur-3xl transition-all" />
+              <Card className="relative border-0 overflow-hidden shadow-2xl">
+                <CardContent className="p-0">
+                  <img
+                    src="/attached_assets/stock_images/ai_artificial_intell_10494fca.jpg"
+                    alt="AI Chatbot Assistant"
+                    className="w-full h-64 object-cover"
+                  />
+                  <div className="p-6 bg-white dark:bg-slate-800">
+                    <h3 className="text-2xl font-black mb-3 text-slate-900 dark:text-white">
+                      AI Chatbot Assistant
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-300 mb-4">
+                      Intelligent conversational AI that understands context, answers questions, and assists your customers 24/7 in multiple languages.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['Natural Language', 'Multi-lingual', '24/7 Support'].map((tag) => (
+                        <Badge key={tag} className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="relative group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-2xl blur-2xl group-hover:blur-3xl transition-all" />
+              <Card className="relative border-0 overflow-hidden shadow-2xl">
+                <CardContent className="p-0">
+                  <img
+                    src="/attached_assets/stock_images/website_design_creat_04708a16.jpg"
+                    alt="AI Content Generation"
+                    className="w-full h-64 object-cover"
+                  />
+                  <div className="p-6 bg-white dark:bg-slate-800">
+                    <h3 className="text-2xl font-black mb-3 text-slate-900 dark:text-white">
+                      AI Content Generation
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-300 mb-4">
+                      Generate blog posts, product descriptions, marketing copy, and social media content with advanced AI that matches your brand voice.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {['SEO Optimized', 'Brand Voice', 'Instant'].map((tag) => (
+                        <Badge key={tag} className="bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+
+          {/* AI Capabilities List */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="bg-white dark:bg-slate-800 rounded-3xl p-8 md:p-12 shadow-2xl"
+          >
+            <h3 className="text-3xl font-black mb-8 text-center text-slate-900 dark:text-white">
+              Complete AI-Powered Toolkit
+            </h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              {[
+                { title: 'Website Generation', desc: 'Create entire websites from text descriptions', icon: Globe },
+                { title: 'Smart SEO', desc: 'Automatic optimization for search engines', icon: TrendingUp },
+                { title: 'Design System', desc: 'AI-generated color schemes & layouts', icon: Palette },
+                { title: 'Content Writing', desc: 'Blog posts, articles, and copy', icon: BookOpen },
+                { title: 'Image Suggestions', desc: 'AI recommends perfect visuals', icon: Sparkles },
+                { title: 'Code Generation', desc: 'Production-ready code automatically', icon: Code }
+              ].map((capability, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="flex gap-4"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                    <capability.icon className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 dark:text-white mb-1">{capability.title}</h4>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">{capability.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Features Section - Enhanced */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50">
+      <section id="features" className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -727,6 +933,139 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
+
+      {/* E-Commerce Visual Showcase - NEW */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="order-2 md:order-1 relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-3xl blur-3xl" />
+              <motion.img
+                src="/attached_assets/stock_images/successful_online_bu_c08662cf.jpg"
+                alt="E-Commerce Success"
+                className="relative rounded-2xl shadow-2xl w-full h-auto"
+                whileHover={{ scale: 1.02 }}
+                transition={{ duration: 0.3 }}
+              />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="order-1 md:order-2"
+            >
+              <Badge className="mb-4 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                <ShoppingCart className="w-3 h-3 mr-1" />
+                E-Commerce Platform
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-slate-900 to-green-900 dark:from-white dark:to-green-100 bg-clip-text text-transparent">
+                Sell Online with Confidence
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                Launch your online store in minutes with our complete e-commerce suite. Manage inventory, process payments, track orders, and grow your business—all from one powerful platform.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: 'Products', value: 'Unlimited' },
+                  { label: 'Payment Methods', value: 'Multiple' },
+                  { label: 'Order Tracking', value: 'Real-time' },
+                  { label: 'Analytics', value: 'Advanced' }
+                ].map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.3 + (idx * 0.1) }}
+                    className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-green-200 dark:border-green-800"
+                  >
+                    <div className="text-2xl font-black text-green-600 dark:text-green-400">{item.value}</div>
+                    <div className="text-sm text-slate-600 dark:text-slate-400">{item.label}</div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Team Collaboration Visual Showcase - NEW */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="py-24 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-900"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+            >
+              <Badge className="mb-4 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                <Users className="w-3 h-3 mr-1" />
+                Team Collaboration
+              </Badge>
+              <h2 className="text-4xl md:text-5xl font-black mb-6 bg-gradient-to-r from-slate-900 to-purple-900 dark:from-white dark:to-purple-100 bg-clip-text text-transparent">
+                Build Together, Grow Together
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+                Empower your team with collaborative tools designed for modern creators. From real-time editing to project management, work seamlessly together from anywhere in the world.
+              </p>
+              <div className="space-y-3">
+                {[
+                  'Real-time collaboration',
+                  'Team workspaces & permissions',
+                  'Built-in communication tools',
+                  'Progress tracking & analytics'
+                ].map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.3 + (idx * 0.1) }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="text-slate-700 dark:text-slate-200 font-medium">{item}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-3xl blur-3xl" />
+              <motion.img
+                src="/attached_assets/stock_images/happy_diverse_team_c_cc06b103.jpg"
+                alt="Team Collaboration"
+                className="relative rounded-2xl shadow-2xl w-full h-auto"
+                whileHover={{ scale: 1.02 }}
+                transition={{ duration: 0.3 }}
+              />
+            </motion.div>
+          </div>
+        </div>
+      </motion.section>
 
       {/* Use Cases Section - Enhanced */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50">
@@ -902,7 +1241,7 @@ export default function HomePage() {
       </section>
 
       {/* Pricing Section - Enhanced */}
-      <section className="py-24 px-4 sm:px-6 lg:px-8">
+      <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
@@ -1100,30 +1439,30 @@ export default function HomePage() {
             <div>
               <h4 className="font-bold text-white mb-4 text-lg">Product</h4>
               <ul className="space-y-3 text-sm">
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Features</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Integrations</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">AI Builder</a></li>
+                <li><a href="#features" className="hover:text-blue-400 transition-colors">Features</a></li>
+                <li><a href="#pricing" className="hover:text-blue-400 transition-colors">Pricing</a></li>
+                <li><a href="/marketplace" className="hover:text-blue-400 transition-colors">Integrations</a></li>
+                <li><a href="/ai-builder" className="hover:text-blue-400 transition-colors">AI Builder</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-bold text-white mb-4 text-lg">Company</h4>
               <ul className="space-y-3 text-sm">
-                <li><a href="#" className="hover:text-blue-400 transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Blog</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Contact</a></li>
+                <li><a href="/about" className="hover:text-blue-400 transition-colors">About Us</a></li>
+                <li><a href="/blog" className="hover:text-blue-400 transition-colors">Blog</a></li>
+                <li><a href="/careers" className="hover:text-blue-400 transition-colors">Careers</a></li>
+                <li><a href="/contact" className="hover:text-blue-400 transition-colors">Contact</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-bold text-white mb-4 text-lg">Resources</h4>
               <ul className="space-y-3 text-sm">
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">API Reference</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Community</a></li>
-                <li><a href="#" className="hover:text-blue-400 transition-colors">Support</a></li>
+                <li><a href="/documentation" className="hover:text-blue-400 transition-colors">Documentation</a></li>
+                <li><a href="/api-reference" className="hover:text-blue-400 transition-colors">API Reference</a></li>
+                <li><a href="/community" className="hover:text-blue-400 transition-colors">Community</a></li>
+                <li><a href="/support" className="hover:text-blue-400 transition-colors">Support</a></li>
               </ul>
             </div>
           </div>
@@ -1136,7 +1475,7 @@ export default function HomePage() {
               <div className="flex gap-6 text-sm">
                 <a href="/privacy" className="hover:text-blue-400 transition-colors">Privacy</a>
                 <a href="/terms" className="hover:text-blue-400 transition-colors">Terms</a>
-                <a href="#" className="hover:text-blue-400 transition-colors">Cookie Policy</a>
+                <a href="/cookie-policy" className="hover:text-blue-400 transition-colors">Cookie Policy</a>
               </div>
             </div>
           </div>
