@@ -50,10 +50,17 @@ class ApiClient {
     const optionsHeaders = options.headers as Record<string, string> || {};
     const { Authorization: _, ...headersWithoutAuth } = optionsHeaders;
     
+    // Don't set Content-Type for FormData - browser will set it with boundary
+    const isFormData = options.body instanceof FormData;
+    
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...headersWithoutAuth,
     };
+
+    // Only set JSON Content-Type if not FormData and not already set
+    if (!isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.accessToken) {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
@@ -142,14 +149,29 @@ class ApiClient {
     }
   }
 
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET' });
+  async get<T>(endpoint: string, options?: { params?: Record<string, any> }): Promise<T> {
+    let url = endpoint;
+    if (options?.params) {
+      const params = new URLSearchParams();
+      Object.entries(options.params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          params.append(key, String(value));
+        }
+      });
+      const queryString = params.toString();
+      if (queryString) {
+        url = `${endpoint}?${queryString}`;
+      }
+    }
+    return this.request<T>(url, { method: 'GET' });
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+    const body = data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined);
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body,
+      ...options,
     });
   }
 
@@ -160,8 +182,18 @@ class ApiClient {
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async patch<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
+  async delete<T>(endpoint: string, options?: any): Promise<T> {
+    return this.request<T>(endpoint, { 
+      method: 'DELETE',
+      body: options?.data ? JSON.stringify(options.data) : undefined,
+    });
   }
 }
 

@@ -4,7 +4,13 @@
  * Multi-language support for the EchoVerse platform
  */
 
-import { logger } from './utils';
+// Simple logger utility
+const logger = {
+  warn: (message: string, ...args: any[]) => console.warn(message, ...args),
+  error: (message: string, ...args: any[]) => console.error(message, ...args),
+  info: (message: string, ...args: any[]) => console.info(message, ...args),
+  debug: (message: string, ...args: any[]) => console.debug(message, ...args),
+};
 
 export type SupportedLocale = 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'ja' | 'zh' | 'ar' | 'ru';
 

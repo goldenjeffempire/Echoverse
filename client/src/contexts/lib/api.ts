@@ -1,4 +1,4 @@
-import { csrfManager } from './csrf-manager';
+import { csrfManager } from '@/lib/csrf-manager';
 
 const API_BASE = import.meta.env.DEV ? '/api' : '/api';
 

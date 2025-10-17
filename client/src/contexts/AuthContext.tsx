@@ -10,6 +10,8 @@ interface User {
   avatar?: string;
   role: string;
   subscriptionTier?: string;
+  isEmailVerified?: boolean;
+  twoFactorEnabled?: boolean;
 }
 
 interface AuthContextType {

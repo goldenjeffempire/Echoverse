@@ -28,9 +28,20 @@ import CheckoutPage from "@/pages/checkout";
 import SearchPage from "@/pages/search";
 import TermsPage from "@/pages/terms";
 import PrivacyPage from "@/pages/privacy";
+import AboutPage from "@/pages/about";
+import ContactPage from "@/pages/contact";
 import DashboardPage from "@/pages/dashboard";
+import BlogPage from "@/pages/blog";
+import CareersPage from "@/pages/careers";
+import DocumentationPage from "@/pages/documentation";
+import ApiReferencePage from "@/pages/api-reference";
+import SupportPage from "@/pages/support";
+import CookiePolicyPage from "@/pages/cookie-policy";
+import PricingPage from "@/pages/pricing";
+import TemplatesPage from "@/pages/templates";
 import AIBuilderPage from "@/pages/ai-builder";
 import WebsiteBuilder from "@/pages/website-builder";
+import AIDemoPage from "@/pages/ai-demo";
 import EcommercePage from "@/pages/ecommerce";
 import CmsPage from "@/pages/cms";
 import CommunityPage from "@/pages/community";
@@ -237,6 +248,83 @@ function Router() {
           </RouteErrorBoundary>
         )}
       </Route>
+      <Route path="/about">
+        {() => (
+          <RouteErrorBoundary routeName="About Us">
+            <AboutPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/contact">
+        {() => (
+          <RouteErrorBoundary routeName="Contact">
+            <ContactPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/blog">
+        {() => (
+          <RouteErrorBoundary routeName="Blog">
+            <BlogPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/careers">
+        {() => (
+          <RouteErrorBoundary routeName="Careers">
+            <CareersPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/documentation">
+        {() => (
+          <RouteErrorBoundary routeName="Documentation">
+            <DocumentationPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/api-reference">
+        {() => (
+          <RouteErrorBoundary routeName="API Reference">
+            <ApiReferencePage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/support">
+        {() => (
+          <RouteErrorBoundary routeName="Support">
+            <SupportPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/cookie-policy">
+        {() => (
+          <RouteErrorBoundary routeName="Cookie Policy">
+            <CookiePolicyPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/pricing">
+        {() => (
+          <RouteErrorBoundary routeName="Pricing">
+            <PricingPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/templates">
+        {() => (
+          <RouteErrorBoundary routeName="Templates">
+            <TemplatesPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
+      <Route path="/ai-demo">
+        {() => (
+          <RouteErrorBoundary routeName="AI Demo">
+            <AIDemoPage />
+          </RouteErrorBoundary>
+        )}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -244,7 +332,7 @@ function Router() {
 
 function AppContent() {
   const [location] = useLocation();
-  const isFullPageRoute = ['/', '/login', '/register', '/reset-password', '/terms', '/privacy'].includes(location);
+  const isFullPageRoute = ['/', '/login', '/register', '/reset-password', '/terms', '/privacy', '/about', '/contact', '/blog', '/careers', '/documentation', '/api-reference', '/support', '/cookie-policy', '/pricing', '/templates', '/ai-demo'].includes(location);
   const style = {
     "--sidebar-width": "20rem",
     "--sidebar-width-icon": "4rem",
