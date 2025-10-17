@@ -97,7 +97,7 @@ export function fileUploadRateLimit() {
       return next();
     }
 
-    const userId = (req.user as any)?.id || req.ip;
+    const userId = (req as any).user?.id || req.ip;
     const now = Date.now();
     const windowMs = 60 * 1000; // 1 minute
     const maxUploads = 10;
@@ -234,7 +234,7 @@ export function enforcePagination() {
       req.path.includes('/api/posts')
     );
 
-    if (isListEndpoint && !req.path.includes('/api/') + req.path.split('/').pop()) {
+    if (isListEndpoint && req.path.split('/').pop()) {
       const limit = parseInt(req.query.limit as string) || 20;
       const maxLimit = 100;
 

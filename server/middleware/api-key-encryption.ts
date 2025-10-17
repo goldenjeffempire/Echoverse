@@ -37,8 +37,9 @@ function getMasterKey(): string {
   }
   
   if (masterKey.length < 32) {
-    logger.error('Encryption key too short', { length: masterKey.length });
-    throw new Error('Encryption key must be at least 32 characters');
+    const error = new Error('Encryption key must be at least 32 characters');
+    logger.error('Encryption key too short', error);
+    throw error;
   }
   
   return masterKey;
@@ -78,10 +79,8 @@ export function encryptApiKey(apiKey: string): string {
     
     // Return base64 encoded
     return combined.toString('base64');
-  } catch (error) {
-    logger.error('API key encryption failed', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+  } catch (err) {
+    logger.error('API key encryption failed', err instanceof Error ? err : new Error('Unknown error'));
     throw new Error('Failed to encrypt API key');
   }
 }
@@ -117,10 +116,8 @@ export function decryptApiKey(encryptedData: string): string {
     decrypted += decipher.final('utf8');
     
     return decrypted;
-  } catch (error) {
-    logger.error('API key decryption failed', {
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+  } catch (err) {
+    logger.error('API key decryption failed', err instanceof Error ? err : new Error('Unknown error'));
     throw new Error('Failed to decrypt API key');
   }
 }
@@ -185,11 +182,9 @@ export async function rotateEncryptionKey(
       // Re-encrypt with new key
       const newEncrypted = encryptApiKey(plainKey);
       reencrypted.push(newEncrypted);
-    } catch (error) {
-      logger.error('Failed to re-encrypt API key', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
+    } catch (err) {
+      logger.error('Failed to re-encrypt API key', err instanceof Error ? err : new Error('Unknown error'));
+      throw err;
     }
   }
   

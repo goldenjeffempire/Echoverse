@@ -12,17 +12,15 @@ const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '14', 10);
 
 // Validate rounds in acceptable range (10-16)
 if (BCRYPT_ROUNDS < 10 || BCRYPT_ROUNDS > 16) {
-  logger.error('BCRYPT_ROUNDS must be between 10 and 16', {
-    currentValue: BCRYPT_ROUNDS
-  });
+  const error = new Error(`BCRYPT_ROUNDS must be between 10 and 16 (current: ${BCRYPT_ROUNDS})`);
+  logger.error(error.message, error);
   process.exit(1);
 }
 
 // Production requires minimum 14 rounds
 if (process.env.NODE_ENV === 'production' && BCRYPT_ROUNDS < 14) {
-  logger.error('BCRYPT_ROUNDS must be at least 14 in production', {
-    currentValue: BCRYPT_ROUNDS
-  });
+  const error = new Error(`BCRYPT_ROUNDS must be at least 14 in production (current: ${BCRYPT_ROUNDS})`);
+  logger.error(error.message, error);
   process.exit(1);
 }
 

@@ -88,10 +88,7 @@ export function validateRedirectUrl(redirectUrl: string): boolean {
     
     return true;
   } catch (error) {
-    logger.error('Invalid redirect URL format', {
-      url: redirectUrl,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    logger.error('Invalid redirect URL format', error instanceof Error ? error : new Error('Invalid redirect URL format'));
     return false;
   }
 }

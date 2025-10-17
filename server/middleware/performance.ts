@@ -88,7 +88,8 @@ export function poolMetricsMiddleware() {
 // MEDIUM-011: Asset Preloading Headers
 export function preloadMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (req.path === '/') {
+    // Only preload assets in production (assets don't exist in dev mode - Vite handles them)
+    if (req.path === '/' && process.env.NODE_ENV === 'production') {
       res.setHeader('Link', [
         '</assets/main.js>; rel=preload; as=script',
         '</assets/main.css>; rel=preload; as=style',
@@ -134,7 +135,8 @@ export function memoryMonitorMiddleware() {
 export function http2PushMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
     const resWithStream = res as any;
-    if (req.path === '/' && resWithStream.stream && typeof resWithStream.stream.pushStream === 'function') {
+    // Only push assets in production (assets don't exist in dev mode - Vite handles them)
+    if (req.path === '/' && process.env.NODE_ENV === 'production' && resWithStream.stream && typeof resWithStream.stream.pushStream === 'function') {
       // Push critical resources
       const resources = [
         { path: '/assets/main.js', type: 'script' },

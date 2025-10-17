@@ -1,19 +1,11 @@
 import { db } from '../db';
-import { products } from '../../shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { products, inventoryReservations } from '../../shared/schema';
+import { eq, sql, and, lte } from 'drizzle-orm';
 import { logger } from '../logger';
 
-interface InventoryReservation {
-  productId: number;
-  quantity: number;
-  reservationId: string;
-  expiresAt: Date;
-}
-
 class InventoryManager {
-  private reservations: Map<string, InventoryReservation> = new Map();
 
-  async checkAvailability(productId: number, quantity: number): Promise<boolean> {
+  async checkAvailability(productId: string, quantity: number): Promise<boolean> {
     try {
       const [product] = await db
         .select({ inventory: products.inventory })
@@ -29,16 +21,17 @@ class InventoryManager {
     }
   }
 
-  async reserveInventory(productId: number, quantity: number, orderId: string): Promise<boolean> {
+  async reserveInventory(productId: string, quantity: number, orderId: string): Promise<boolean> {
     try {
       // Use pessimistic locking (FOR UPDATE) to prevent race conditions
       await db.execute(sql`BEGIN`);
 
-      const [product] = await db.execute(
+      const result = await db.execute(
         sql`SELECT inventory FROM products WHERE id = ${productId} FOR UPDATE`
       );
 
-      const currentInventory = (product as any)?.inventory || 0;
+      const product = result.rows?.[0] as { inventory?: number } | undefined;
+      const currentInventory = product?.inventory ?? 0;
 
       if (currentInventory < quantity) {
         await db.execute(sql`ROLLBACK`);
@@ -56,16 +49,16 @@ class InventoryManager {
 
       await db.execute(sql`COMMIT`);
 
-      // Create reservation record (expires in 15 minutes)
-      const reservation: InventoryReservation = {
+      // Create persistent reservation record in database (expires in 15 minutes)
+      await db.insert(inventoryReservations).values({
         productId,
+        orderId,
         quantity,
-        reservationId: orderId,
+        status: 'active',
         expiresAt: new Date(Date.now() + 15 * 60 * 1000)
-      };
-      this.reservations.set(orderId, reservation);
+      });
 
-      logger.info('Inventory reserved', { productId, quantity, orderId });
+      logger.info('Inventory reserved in database', { productId, quantity, orderId });
       return true;
 
     } catch (error) {
@@ -76,18 +69,33 @@ class InventoryManager {
   }
 
   async confirmReservation(orderId: string): Promise<void> {
-    const reservation = this.reservations.get(orderId);
-    if (reservation) {
-      this.reservations.delete(orderId);
-      logger.info('Inventory reservation confirmed', { orderId });
+    try {
+      // Update reservation status to confirmed in database
+      await db
+        .update(inventoryReservations)
+        .set({ status: 'confirmed', updatedAt: new Date() })
+        .where(eq(inventoryReservations.orderId, orderId));
+      
+      logger.info('Inventory reservation confirmed in database', { orderId });
+    } catch (error) {
+      logger.error('Failed to confirm reservation', error as Error);
     }
   }
 
   async releaseReservation(orderId: string): Promise<void> {
-    const reservation = this.reservations.get(orderId);
-    if (!reservation) return;
-
     try {
+      // Get reservation from database
+      const [reservation] = await db
+        .select()
+        .from(inventoryReservations)
+        .where(and(
+          eq(inventoryReservations.orderId, orderId),
+          eq(inventoryReservations.status, 'active')
+        ))
+        .limit(1);
+
+      if (!reservation) return;
+
       // Return inventory
       await db
         .update(products)
@@ -96,29 +104,41 @@ class InventoryManager {
         })
         .where(eq(products.id, reservation.productId));
 
-      this.reservations.delete(orderId);
-      logger.info('Inventory reservation released', { orderId });
+      // Mark reservation as released
+      await db
+        .update(inventoryReservations)
+        .set({ status: 'released', updatedAt: new Date() })
+        .where(eq(inventoryReservations.id, reservation.id));
+
+      logger.info('Inventory reservation released from database', { orderId });
     } catch (error) {
       logger.error('Failed to release inventory reservation', error as Error);
     }
   }
 
   async cleanupExpiredReservations(): Promise<void> {
-    const now = new Date();
-    const expired: string[] = [];
+    try {
+      const now = new Date();
+      
+      // Find all expired active reservations from database
+      const expiredReservations = await db
+        .select()
+        .from(inventoryReservations)
+        .where(and(
+          eq(inventoryReservations.status, 'active'),
+          lte(inventoryReservations.expiresAt, now)
+        ));
 
-    for (const [orderId, reservation] of this.reservations.entries()) {
-      if (reservation.expiresAt <= now) {
-        expired.push(orderId);
+      // Release each expired reservation
+      for (const reservation of expiredReservations) {
+        await this.releaseReservation(reservation.orderId);
       }
-    }
 
-    for (const orderId of expired) {
-      await this.releaseReservation(orderId);
-    }
-
-    if (expired.length > 0) {
-      logger.info('Cleaned up expired inventory reservations', { count: expired.length });
+      if (expiredReservations.length > 0) {
+        logger.info('Cleaned up expired inventory reservations from database', { count: expiredReservations.length });
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup expired reservations', error as Error);
     }
   }
 

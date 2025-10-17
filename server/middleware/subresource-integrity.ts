@@ -146,10 +146,7 @@ export async function validateExternalResource(
     
     return validateSRIHash(content, expectedIntegrity);
   } catch (error) {
-    logger.error('External resource validation failed', {
-      url,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    logger.error('External resource validation failed', error instanceof Error ? error : new Error('External resource validation failed'));
     return false;
   }
 }

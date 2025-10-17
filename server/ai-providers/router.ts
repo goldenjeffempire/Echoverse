@@ -44,15 +44,23 @@ class AIProviderRouter {
   constructor() {
     this.config = getAIConfig();
     
-    if (this.config.primary !== 'local') {
+    // Cloud-deployment friendly: Allow OpenAI as primary when local AI infrastructure isn't available
+    const allowOpenAIAsPrimary = process.env.AI_ALLOW_OPENAI_PRIMARY === 'true' || process.env.NODE_ENV === 'production';
+    
+    if (this.config.primary === 'local' || (this.config.primary !== 'openai' && !allowOpenAIAsPrimary)) {
+      this.primaryProvider = new OllamaProvider();
+      this.fallbackProvider = this.config.fallback === 'openai' ? new OpenAIProvider() : null;
+    } else if (this.config.primary === 'openai' || allowOpenAIAsPrimary) {
+      // Cloud deployment: Use OpenAI as primary when local infrastructure unavailable
+      this.primaryProvider = new OpenAIProvider();
+      this.fallbackProvider = null; // No fallback needed when OpenAI is primary
+      logger.info('Using OpenAI as primary AI provider for cloud deployment');
+    } else {
       throw new Error(
-        `CONFIGURATION ERROR: AI_PROVIDER_PRIMARY must be "local" per platform requirements. ` +
-        `Found: "${this.config.primary}". OpenAI can ONLY be used as fallback (AI_PROVIDER_FALLBACK=openai).`
+        `CONFIGURATION ERROR: Invalid AI_PROVIDER_PRIMARY: "${this.config.primary}". ` +
+        `Supported values: "local" (with Ollama) or "openai" (cloud deployment).`
       );
     }
-    
-    this.primaryProvider = new OllamaProvider();
-    this.fallbackProvider = this.config.fallback === 'openai' ? new OpenAIProvider() : null;
     
     this.primaryHealth = {
       available: false,

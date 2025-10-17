@@ -7,7 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from './error-boundary';
 import { logger } from '../logger';
 
-const ALLOWED_CONTENT_TYPES: Record<string, string[]> = {
+const ALLOWED_CONTENT_TYPES: Record<string, (string | RegExp)[]> = {
   // JSON endpoints
   'application/json': [
     'application/json',
@@ -57,7 +57,7 @@ const DOCUMENT_MIME_TYPES = [
  * Validate Content-Type header matches expected type
  */
 export function validateContentType(
-  allowed: string | string[]
+  allowed: string | (string | RegExp)[]
 ): (req: Request, res: Response, next: NextFunction) => void {
   return (req: Request, res: Response, next: NextFunction): void => {
     // Skip for GET, HEAD, OPTIONS requests (no body)
@@ -79,10 +79,13 @@ export function validateContentType(
 
     const allowedTypes = Array.isArray(allowed) ? allowed : [allowed];
     const isValid = allowedTypes.some(type => {
-      if (type instanceof RegExp) {
+      if (typeof type === 'object' && type instanceof RegExp) {
         return type.test(contentType);
       }
-      return contentType.toLowerCase().startsWith(type.toLowerCase());
+      if (typeof type === 'string') {
+        return contentType.toLowerCase().startsWith(type.toLowerCase());
+      }
+      return false;
     });
 
     if (!isValid) {

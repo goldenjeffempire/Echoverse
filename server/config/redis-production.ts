@@ -43,7 +43,7 @@ export async function initializeRedis(): Promise<void> {
   if (!validation.valid) {
     const isProd = process.env.NODE_ENV === 'production';
     const errorMsg = `Redis URL validation failed: ${validation.error}`;
-    logger.error(errorMsg, { isProd });
+    logger.error(errorMsg, new Error(errorMsg));
     if (isProd) {
       // CRIT-004 FIX: Warn but don't crash - allow graceful fallback
       logger.warn('Falling back to in-memory cache due to invalid Redis URL');
@@ -102,6 +102,10 @@ export async function initializeRedis(): Promise<void> {
 
 export function getRedisClient(): RedisClientType | null {
   return redisClient;
+}
+
+export function checkRedisAvailability(): boolean {
+  return isRedisAvailable;
 }
 
 export function isRedisConnected(): boolean {

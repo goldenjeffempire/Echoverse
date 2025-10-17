@@ -23,11 +23,19 @@ export function hash2FABackupCode(code: string): string {
 // CRITICAL-005: OAuth Session Regeneration
 export async function regenerateSessionAfterOAuth(req: Request): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (!req.session) {
+      return reject(new Error('Session not available'));
+    }
+    
     const oldSessionData = { ...req.session };
     
     req.session.regenerate((err) => {
       if (err) {
         return reject(err);
+      }
+
+      if (!req.session) {
+        return reject(new Error('Session not available after regeneration'));
       }
 
       // Restore necessary data

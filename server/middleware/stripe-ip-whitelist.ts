@@ -57,7 +57,7 @@ function isStripeIP(ip: string): boolean {
   }
 }
 
-export function stripeIPWhitelistMiddleware(req: Request, res: Response, next: NextFunction): void {
+export function stripeIPWhitelistMiddleware(req: Request, res: Response, next: NextFunction): Response | void {
   // Skip IP validation in development
   if (process.env.NODE_ENV === 'development') {
     logger.debug('Stripe IP whitelist skipped in development');
@@ -72,29 +72,21 @@ export function stripeIPWhitelistMiddleware(req: Request, res: Response, next: N
     '';
 
   if (!clientIP) {
-    logger.error('Unable to determine client IP for Stripe webhook', undefined, {
-      headers: req.headers,
-      path: req.path
-    });
+    logger.error('Unable to determine client IP for Stripe webhook', new Error('Unable to determine client IP'));
     return res.status(403).json({
       error: 'Forbidden',
       message: 'Unable to verify request origin'
-    });
+    }) as any;
   }
 
   // Validate IP against Stripe's whitelist
   if (!isStripeIP(clientIP)) {
-    logger.error('Stripe webhook from unauthorized IP', new Error('Unauthorized IP'), {
-      clientIP,
-      path: req.path,
-      headers: req.headers,
-      requestId: res.locals.requestId
-    });
+    logger.error('Stripe webhook from unauthorized IP', new Error('Unauthorized IP'));
     
     return res.status(403).json({
       error: 'Forbidden',
       message: 'Request must originate from Stripe servers'
-    });
+    }) as any;
   }
 
   logger.debug('Stripe IP whitelist validation passed', {

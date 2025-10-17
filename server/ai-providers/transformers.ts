@@ -1,0 +1,225 @@
+/**
+ * Local Transformers.js AI Provider
+ * Runs lightweight AI models locally using @xenova/transformers
+ * Production-ready alternative to Ollama for cloud deployments
+ */
+
+import { pipeline, env } from '@xenova/transformers';
+import { AIProvider, AIProviderConfig, ProviderHealth, TokenUsage } from './base';
+import { AIServiceError } from '../utils/errors';
+import { logger } from '../logger';
+
+// Configure transformers.js to use local cache
+env.localModelPath = './models';
+env.allowRemoteModels = true;
+env.allowLocalModels = true;
+
+export class TransformersProvider implements AIProvider {
+  name = 'Transformers.js (Local)';
+  
+  private textGenerator: any = null;
+  private chatModel: any = null;
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
+
+  // Use lightweight models that work well in constrained environments
+  private readonly TEXT_MODEL = 'Xenova/gpt2';
+  private readonly CHAT_MODEL = 'Xenova/LaMini-Flan-T5-783M';
+  
+  constructor() {
+    this.initPromise = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    try {
+      logger.info('Initializing Transformers.js local AI provider...', {
+        textModel: this.TEXT_MODEL,
+        chatModel: this.CHAT_MODEL
+      });
+
+      // Initialize text generation pipeline with lightweight model
+      this.textGenerator = await pipeline('text-generation', this.TEXT_MODEL);
+      
+      this.initialized = true;
+      logger.info('Local AI provider initialized successfully', {
+        provider: this.name,
+        model: this.TEXT_MODEL
+      });
+    } catch (error) {
+      logger.error('Failed to initialize local AI provider', error instanceof Error ? error : undefined);
+      throw new AIServiceError(
+        'Failed to initialize local AI models',
+        'LOCAL_AI_INIT_ERROR',
+        { originalError: error instanceof Error ? error.message : String(error) }
+      );
+    }
+  }
+
+  async checkHealth(): Promise<ProviderHealth> {
+    const startTime = Date.now();
+    
+    try {
+      await this.ensureInitialized();
+      
+      if (!this.textGenerator) {
+        return {
+          available: false,
+          latency: Date.now() - startTime,
+          lastCheck: new Date(),
+          consecutiveFailures: 1,
+          error: 'Text generator not initialized'
+        };
+      }
+
+      // Quick health check with a simple prompt
+      await this.textGenerator('Hello', { max_new_tokens: 5 });
+
+      return {
+        available: true,
+        latency: Date.now() - startTime,
+        lastCheck: new Date(),
+        consecutiveFailures: 0
+      };
+    } catch (error) {
+      return {
+        available: false,
+        latency: Date.now() - startTime,
+        lastCheck: new Date(),
+        consecutiveFailures: 1,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized && this.initPromise) {
+      await this.initPromise;
+    }
+    if (!this.initialized) {
+      throw new AIServiceError(
+        'Local AI provider not initialized',
+        'NOT_INITIALIZED'
+      );
+    }
+  }
+
+  async generateText(
+    prompt: string,
+    options: {
+      maxTokens?: number;
+      temperature?: number;
+      systemPrompt?: string;
+    } = {}
+  ): Promise<{ text: string; usage: TokenUsage }> {
+    await this.ensureInitialized();
+
+    try {
+      const fullPrompt = options.systemPrompt 
+        ? `${options.systemPrompt}\n\nUser: ${prompt}\nAssistant:`
+        : prompt;
+
+      const result = await this.textGenerator(fullPrompt, {
+        max_new_tokens: options.maxTokens || 150,
+        temperature: options.temperature || 0.7,
+        do_sample: true,
+        top_k: 50,
+        top_p: 0.95,
+      });
+
+      const generatedText = result[0]?.generated_text || '';
+      const responseText = generatedText.replace(fullPrompt, '').trim();
+
+      // Estimate token usage (rough approximation)
+      const promptTokens = Math.ceil(fullPrompt.length / 4);
+      const completionTokens = Math.ceil(responseText.length / 4);
+
+      return {
+        text: responseText,
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens
+        }
+      };
+    } catch (error) {
+      logger.error('Local AI generation error', error instanceof Error ? error : undefined);
+      throw new AIServiceError(
+        'Failed to generate text with local AI',
+        'GENERATION_ERROR',
+        { originalError: error instanceof Error ? error.message : String(error) }
+      );
+    }
+  }
+
+  async generateChatResponse(
+    messages: Array<{ role: string; content: string }>,
+    options: {
+      maxTokens?: number;
+      temperature?: number;
+    } = {}
+  ): Promise<{ message: string; usage: TokenUsage }> {
+    await this.ensureInitialized();
+
+    try {
+      // Convert chat messages to a single prompt
+      const prompt = messages
+        .map(msg => {
+          const role = msg.role === 'user' ? 'User' : 'Assistant';
+          return `${role}: ${msg.content}`;
+        })
+        .join('\n') + '\nAssistant:';
+
+      const result = await this.textGenerator(prompt, {
+        max_new_tokens: options.maxTokens || 200,
+        temperature: options.temperature || 0.7,
+        do_sample: true,
+        top_k: 50,
+        top_p: 0.95,
+      });
+
+      const generatedText = result[0]?.generated_text || '';
+      const responseText = generatedText.replace(prompt, '').trim();
+
+      const promptTokens = Math.ceil(prompt.length / 4);
+      const completionTokens = Math.ceil(responseText.length / 4);
+
+      return {
+        message: responseText,
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens
+        }
+      };
+    } catch (error) {
+      logger.error('Local AI chat error', error instanceof Error ? error : undefined);
+      throw new AIServiceError(
+        'Failed to generate chat response with local AI',
+        'CHAT_ERROR',
+        { originalError: error instanceof Error ? error.message : String(error) }
+      );
+    }
+  }
+
+  async generateStream(
+    prompt: string,
+    options: { maxTokens?: number; temperature?: number } = {}
+  ): Promise<AsyncIterable<string>> {
+    // For now, return non-streaming response as a single chunk
+    // Future enhancement: implement true streaming with transformers.js
+    const result = await this.generateText(prompt, options);
+    
+    async function* streamResponse() {
+      yield result.text;
+    }
+    
+    return streamResponse();
+  }
+
+  estimateCost(usage: TokenUsage): number {
+    // Local models are free!
+    return 0;
+  }
+}

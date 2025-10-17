@@ -14,6 +14,22 @@ let lastTripTime = 0;
 const TRIP_ALERT_THRESHOLD = 5; // Alert after 5 trips in 5 minutes
 const TRIP_WINDOW_MS = 300000; // 5 minutes
 
+// OPTIMIZATION FIX: Initialize pool stats on module load to ensure circuit breaker is active from first request
+function initializePoolStats() {
+  const dbStats = getDatabaseStats();
+  const total = dbStats.totalConnections || 0;
+  const maxConnections = dbStats.poolMax || 10;
+  cachedPoolUtilization = maxConnections > 0 ? (total / maxConnections) * 100 : 0;
+  logger.debug('Connection pool circuit breaker initialized', {
+    totalConnections: total,
+    maxConnections,
+    utilizationPercent: cachedPoolUtilization
+  });
+}
+
+// Initialize stats immediately
+initializePoolStats();
+
 export async function connectionPoolCircuitBreaker(
   req: Request,
   res: Response,
@@ -22,10 +38,14 @@ export async function connectionPoolCircuitBreaker(
   try {
     const now = Date.now();
     
+    // OPTIMIZATION FIX: Only check pool stats periodically, use lightweight cached metrics
     if (now - lastPoolCheck > CHECK_INTERVAL_MS) {
-      const stats = await getConnectionPoolStats();
+      // Use lightweight getDatabaseStats() which doesn't query database
       const dbStats = getDatabaseStats();
-      cachedPoolUtilization = stats.utilizationPercent;
+      // Calculate utilization from pool stats, not from database query
+      const total = dbStats.totalConnections || 0;
+      const maxConnections = dbStats.poolMax || 10;
+      cachedPoolUtilization = maxConnections > 0 ? (total / maxConnections) * 100 : 0;
       lastPoolCheck = now;
       
       // CRITICAL FIX: Monitor connection queue

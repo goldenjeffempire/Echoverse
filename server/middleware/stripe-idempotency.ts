@@ -37,7 +37,7 @@ export function stripeIdempotencyMiddleware(
   req: IdempotentRequest,
   res: Response,
   next: NextFunction
-): void {
+): Response | void {
   // Get idempotency key from header (client should provide, or we generate one)
   let idempotencyKey = req.get('Idempotency-Key') || req.get('X-Idempotency-Key');
   
@@ -48,7 +48,7 @@ export function stripeIdempotencyMiddleware(
       return res.status(400).json({
         error: 'Idempotency-Key header required for payment requests',
         code: 'IDEMPOTENCY_KEY_REQUIRED'
-      });
+      }) as any;
     }
     
     // In development, generate one automatically (with warning)
@@ -71,7 +71,7 @@ export function stripeIdempotencyMiddleware(
       age: Date.now() - cached.timestamp
     });
     
-    return res.status(200).json(cached.response);
+    return res.status(200).json(cached.response) as any;
   }
   
   // Store the idempotency key on the request for the handler to use

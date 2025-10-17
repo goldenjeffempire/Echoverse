@@ -23,7 +23,7 @@ router.post('/report', async (req, res) => {
     logger.error('Frontend error reported', new Error(errorData.error), {
       url: errorData.url,
       userAgent: errorData.userAgent,
-      userId: errorData.userId || req.user?.id,
+      userId: errorData.userId || (req as any).user?.id,
       errorInfo: errorData.errorInfo,
       timestamp: errorData.timestamp || new Date().toISOString()
     });

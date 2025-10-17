@@ -4,9 +4,10 @@
  */
 
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { Resource } from '@opentelemetry/resources';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION, SEMRESATTRS_DEPLOYMENT_ENVIRONMENT } from '@opentelemetry/semantic-conventions';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 
@@ -15,13 +16,11 @@ const isProduction = process.env.NODE_ENV === 'production';
 // Production-optimized configuration
 export function setupOpenTelemetry() {
   const sdk = new NodeSDK({
-    resource: {
-      attributes: {
-        [SemanticResourceAttributes.SERVICE_NAME]: 'echoverse-api',
-        [SemanticResourceAttributes.SERVICE_VERSION]: process.env.APP_VERSION || '1.0.0',
-        [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: process.env.NODE_ENV || 'development',
-      }
-    },
+    resource: new Resource({
+      [SEMRESATTRS_SERVICE_NAME]: 'echoverse-api',
+      [SEMRESATTRS_SERVICE_VERSION]: process.env.APP_VERSION || '1.0.0',
+      [SEMRESATTRS_DEPLOYMENT_ENVIRONMENT]: process.env.NODE_ENV || 'development',
+    }),
     
     // Prometheus metrics exporter
     metricReader: new PrometheusExporter({
