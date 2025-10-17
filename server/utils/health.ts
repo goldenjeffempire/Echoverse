@@ -117,15 +117,29 @@ async function checkRedis(): Promise<HealthCheck | undefined> {
   
   const start = Date.now();
   try {
-    // TODO: Add Redis client check when Redis is implemented
-    // For now, just return a placeholder
-    return {
-      status: 'warn',
-      responseTime: Date.now() - start,
-      details: {
-        message: 'Redis health check not implemented'
-      }
-    };
+    const { getRedisClient, isRedisConnected } = await import('../config/redis-production');
+    const client = getRedisClient();
+    const connected = isRedisConnected();
+    
+    if (client && connected) {
+      // Test Redis with ping
+      await client.ping();
+      return {
+        status: 'pass',
+        responseTime: Date.now() - start,
+        details: {
+          message: 'Redis connected and responsive'
+        }
+      };
+    } else {
+      return {
+        status: 'warn',
+        responseTime: Date.now() - start,
+        details: {
+          message: 'Redis configured but not connected (using in-memory fallback)'
+        }
+      };
+    }
   } catch (error) {
     return {
       status: 'fail',

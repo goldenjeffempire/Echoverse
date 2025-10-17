@@ -322,8 +322,17 @@ export async function logSecurityEvent(
     timestamp: new Date().toISOString()
   });
   
-  // TODO: Store security events in database for audit trail
-  // This should be implemented in a separate audit log table
+  // Store security events in database for audit trail
+  await storage.createAuditLog({
+    userId,
+    action: eventType,
+    resource: 'session',
+    resourceId: sessionId,
+    details: metadata,
+    ipAddress: metadata?.ipAddress as string,
+    userAgent: metadata?.userAgent as string,
+    success: true
+  });
 }
 
 /**

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import supertest from 'supertest';
 import { createTestApp } from '../__tests__/app-factory';
 
-let request: supertest.SuperTest<supertest.Test>;
+let request: ReturnType<typeof supertest>;
 
 beforeAll(async () => {
   const app = await createTestApp();
