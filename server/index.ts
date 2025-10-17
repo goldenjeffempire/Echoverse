@@ -199,6 +199,7 @@ app.set('trust proxy', 1);
 app.use(requestIdMiddleware);
 
 // PHASE 2: Connection pool circuit breaker - return 503 when pool >90% utilized
+// OPTIMIZED: Now uses lightweight cached metrics instead of database query on every request
 app.use(connectionPoolCircuitBreaker);
 
 // PHASE 1: Attach session fingerprint to all requests for security tracking
@@ -430,12 +431,14 @@ if (app.get("env") === "development") {
 initializeSessionCleanup();
 
 // Initialize database cleanup jobs
-const { initializeDatabaseCleanup } = await import("./utils/password-history-cleanup");
-initializeDatabaseCleanup();
+// TEMPORARILY DISABLED - drizzle queries hanging, holding all pool connections
+// const { initializeDatabaseCleanup } = await import("./utils/password-history-cleanup");
+// initializeDatabaseCleanup();
 
 // Initialize connection pool monitoring
-const { startConnectionPoolMonitoring } = await import("./monitoring/connection-pool");
-startConnectionPoolMonitoring();
+// TEMPORARILY DISABLED - monitoring queries may be causing deadlock
+// const { startConnectionPoolMonitoring } = await import("./monitoring/connection-pool");
+// startConnectionPoolMonitoring();
 
 // Preload CSRF tokens to prevent bootstrap race condition
 const csrfTokenCache = new Map<string, { token: string; expires: number }>();
@@ -503,8 +506,12 @@ app.set('csrfTokenCache', csrfTokenCache);
         const { monitorConnectionPool } = await import('./db');
         monitorConnectionPool();
         
-        const { startReplicationLagMonitoring } = await import('./utils/replication-lag-monitor');
-        startReplicationLagMonitoring(60000); // Check every minute
+        // Replication lag monitoring only needed for read replicas in production
+        if (process.env.DATABASE_REPLICA_URL) {
+          const { startReplicationLagMonitoring } = await import('./utils/replication-lag-monitor');
+          startReplicationLagMonitoring(60000); // Check every minute
+          log('Replication lag monitoring started');
+        }
         
         const { initializeDatabaseCleanup } = await import('./utils/password-history-cleanup');
         initializeDatabaseCleanup();

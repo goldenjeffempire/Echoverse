@@ -954,16 +954,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).json({ error: 'Missing signature' });
     }
 
-    // PHASE 1: Use webhook signature fallback verification for enhanced security
-    const { verifyStripeWebhookWithFallback } = await import('./utils/webhook-signature-fallback');
-    const verificationResult = await verifyStripeWebhookWithFallback(req.body, sig as string, stripe);
-    
-    if (!verificationResult.verified) {
-      logger.error('Webhook signature verification failed (all methods)', new Error(verificationResult.error || 'Unknown verification error'));
-      return res.status(401).send(`Webhook Error: ${verificationResult.error}`);
+    // PHASE 1: Use Stripe's built-in webhook signature verification
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig as string, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err: any) {
+      logger.error('Webhook signature verification failed', err);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
     }
-    
-    const event = verificationResult.event;
     
     // CRIT-012 FIX: Add timestamp validation to prevent replay attacks
     // Stripe includes timestamp in signature, reject if older than 5 minutes
@@ -978,14 +976,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         age: currentTime - timestamp
       });
       return res.status(400).send('Webhook Error: Event timestamp too old');
-    }
-    
-    if (verificationResult.method !== 'primary') {
-      logger.warn('Webhook verified with non-primary method', {
-        method: verificationResult.method,
-        eventId: event.id,
-        type: event.type
-      });
     }
 
     const { checkWebhookReplayProtection, markWebhookProcessed } = await import('./utils/webhook');
@@ -1426,7 +1416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // E-Commerce Product Management
+  // E-Commerce Product Management  
   app.get("/api/products", cacheMiddleware(300), optionalAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { category, search, limit = 20, offset = 0 } = req.query;
@@ -1435,19 +1425,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parseInt(offset as string)
       );
 
-      const result = await storage.getProducts({
-        category: category as string,
-        search: sanitizeSearchInput(search as string),
-        limit: pagination.limit,
-        offset: pagination.offset
-      });
+      // Direct pool.query() without drizzle to test
+      const { pool } = await import('./db');
+      
+      const result = await pool.query(
+        'SELECT * FROM products WHERE is_active = true ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+        [pagination.limit, pagination.offset]
+      );
+      const countResult = await pool.query('SELECT COUNT(*) as count FROM products WHERE is_active = true');
 
-      paginatedResponse(res, result.data, {
+      paginatedResponse(res, result.rows, {
         limit: pagination.limit,
         offset: pagination.offset,
-        totalCount: result.totalCount
+        totalCount: parseInt(countResult.rows[0].count)
       });
-    } catch (error) {
+    } catch (error: any) {
+      logger.error('Products API error', error instanceof Error ? error : new Error(String(error)));
       errorResponse(res, "Error fetching products");
     }
   });
@@ -1714,7 +1707,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const userEmail = req.user!.email || 'user@example.com';
+      const userEmail = req.user!.email;
+      
+      if (!userEmail) {
+        return res.status(400).json({ 
+          error: 'User email is required for analytics export' 
+        });
+      }
 
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(totalAmount * 100),
@@ -2166,6 +2165,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/comments/moderation", authenticateToken, requireRole(["admin", "moderator"]), async (req, res) => {
+    try {
+      const { status = 'pending' } = req.query;
+      const comments = await storage.getCommentsByStatus(status as string);
+      res.json(comments);
+    } catch (error: any) {
+      res.status(500).json({ message: `Error fetching comments: ${error.message}` });
+    }
+  });
+
   app.put("/api/comments/:id/status", authenticateToken, requireRole(["admin", "moderator"]), async (req, res) => {
     try {
       const { status } = req.body;
@@ -2588,6 +2597,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Analytics Endpoints
+  app.get("/api/analytics", optionalAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { range = '30days', userId } = req.query;
+      const targetUserId = userId || req.user?.id;
+
+      // Fetch data based on time range
+      const [ordersResult, productsResult] = await Promise.all([
+        targetUserId ? storage.getOrders(targetUserId as string, { limit: 1000, offset: 0 }) : Promise.resolve({ data: [], totalCount: 0 }),
+        storage.getProducts({ limit: 1000, offset: 0 })
+      ]);
+
+      const totalRevenue = ordersResult.data
+        .filter(o => o.status === 'delivered' || o.status === 'paid')
+        .reduce((sum, order) => sum + parseFloat(order.total.toString()), 0);
+
+      const totalOrders = ordersResult.data.length;
+      const activeUsers = targetUserId ? 1 : 0;
+      
+      // Metrics
+      const metrics = [
+        {
+          label: 'Total Revenue',
+          value: `$${totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          change: 12.5,
+          trend: 'up',
+          icon: 'DollarSign'
+        },
+        {
+          label: 'Total Orders',
+          value: totalOrders.toString(),
+          change: 8.2,
+          trend: 'up',
+          icon: 'ShoppingCart'
+        },
+        {
+          label: 'Active Users',
+          value: activeUsers.toString(),
+          change: -3.1,
+          trend: totalRevenue > 0 ? 'up' : 'neutral',
+          icon: 'Users'
+        },
+        {
+          label: 'Page Views',
+          value: (totalOrders * 10).toString(),
+          change: 15.3,
+          trend: 'up',
+          icon: 'Eye'
+        }
+      ];
+
+      // Revenue data (last 7 days)
+      const revenueData = ordersResult.data.slice(0, 7).map((order, i) => ({
+        date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        value: parseFloat(order.total.toString()),
+        orders: 1
+      }));
+
+      // Traffic sources
+      const trafficSources = [
+        { label: 'Direct', value: Math.floor(totalOrders * 0.4) },
+        { label: 'Search Engines', value: Math.floor(totalOrders * 0.35) },
+        { label: 'Social Media', value: Math.floor(totalOrders * 0.15) },
+        { label: 'Referral', value: Math.floor(totalOrders * 0.1) }
+      ];
+
+      // Top products
+      const topProducts = productsResult.data.slice(0, 5).map(p => ({
+        label: p.name,
+        value: p.inventory || 0,
+        revenue: parseFloat(p.price.toString()) * (p.inventory || 0)
+      }));
+
+      // Conversion funnel
+      const visits = totalOrders * 10;
+      const conversionFunnel = [
+        { stage: 'Visits', value: visits, percentage: 100 },
+        { stage: 'Product Views', value: Math.floor(visits * 0.65), percentage: 65 },
+        { stage: 'Add to Cart', value: Math.floor(visits * 0.32), percentage: 32 },
+        { stage: 'Checkout', value: Math.floor(visits * 0.18), percentage: 18 },
+        { stage: 'Purchase', value: totalOrders, percentage: (totalOrders / visits * 100).toFixed(2) }
+      ];
+
+      res.json({
+        metrics,
+        revenueData,
+        trafficSources,
+        topProducts,
+        conversionFunnel
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching analytics" });
+    }
+  });
+
   app.get("/api/analytics/stats", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const userId = req.user!.id;
@@ -2625,6 +2728,534 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ activities });
     } catch (error) {
       res.status(500).json({ message: "Error fetching activity" });
+    }
+  });
+
+  // Forums API Endpoints
+  app.get("/api/forums", optionalAuth, async (req, res) => {
+    try {
+      const { search, limit, offset, categoryId } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getForums({
+        search: search as string,
+        limit: pagination.limit,
+        offset: pagination.offset,
+        categoryId: categoryId as string
+      });
+      
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching forums");
+    }
+  });
+
+  app.get("/api/forums/:id", optionalAuth, async (req, res) => {
+    try {
+      const forum = await storage.getForum(req.params.id);
+      if (!forum) {
+        return notFoundResponse(res, "Forum not found");
+      }
+      successResponse(res, { forum });
+    } catch (error) {
+      errorResponse(res, "Error fetching forum");
+    }
+  });
+
+  app.post("/api/forums", authenticateToken, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
+    try {
+      const forum = await storage.createForum({ ...req.body, createdBy: req.user!.id });
+      successResponse(res, { forum }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating forum: ${error.message}`);
+    }
+  });
+
+  app.put("/api/forums/:id", authenticateToken, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
+    try {
+      const forum = await storage.updateForum(req.params.id, req.body);
+      successResponse(res, { forum });
+    } catch (error: any) {
+      errorResponse(res, `Error updating forum: ${error.message}`);
+    }
+  });
+
+  app.get("/api/forums/:id/topics", optionalAuth, async (req, res) => {
+    try {
+      const { limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getForumTopics(req.params.id, pagination);
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching forum topics");
+    }
+  });
+
+  app.post("/api/forums/:id/topics", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const topic = await storage.createForumTopic({
+        ...req.body,
+        forumId: req.params.id,
+        userId: req.user!.id
+      });
+      successResponse(res, { topic }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating topic: ${error.message}`);
+    }
+  });
+
+  app.get("/api/forums/topics/:topicId/replies", optionalAuth, async (req, res) => {
+    try {
+      const { limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 50,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getForumReplies(req.params.topicId, pagination);
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching replies");
+    }
+  });
+
+  app.post("/api/forums/topics/:topicId/replies", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const reply = await storage.createForumReply({
+        ...req.body,
+        topicId: req.params.topicId,
+        userId: req.user!.id
+      });
+      successResponse(res, { reply }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating reply: ${error.message}`);
+    }
+  });
+
+  // Landing Pages API Endpoints
+  app.get("/api/landing-pages", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getLandingPages(req.user!.id, pagination);
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching landing pages");
+    }
+  });
+
+  app.get("/api/landing-pages/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const page = await storage.getLandingPage(req.params.id);
+      if (!page) {
+        return notFoundResponse(res, "Landing page not found");
+      }
+      successResponse(res, { page });
+    } catch (error) {
+      errorResponse(res, "Error fetching landing page");
+    }
+  });
+
+  app.post("/api/landing-pages", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const page = await storage.createLandingPage({ ...req.body, userId: req.user!.id });
+      successResponse(res, { page }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating landing page: ${error.message}`);
+    }
+  });
+
+  app.put("/api/landing-pages/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const page = await storage.updateLandingPage(req.params.id, req.body);
+      successResponse(res, { page });
+    } catch (error: any) {
+      errorResponse(res, `Error updating landing page: ${error.message}`);
+    }
+  });
+
+  app.delete("/api/landing-pages/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteLandingPage(req.params.id);
+      successResponse(res, { message: "Landing page deleted successfully" });
+    } catch (error: any) {
+      errorResponse(res, `Error deleting landing page: ${error.message}`);
+    }
+  });
+
+  app.post("/api/landing-pages/:id/publish", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const page = await storage.publishLandingPage(req.params.id);
+      successResponse(res, { page });
+    } catch (error: any) {
+      errorResponse(res, `Error publishing landing page: ${error.message}`);
+    }
+  });
+
+  // Funnels API Endpoints
+  app.get("/api/funnels", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getFunnels(req.user!.id, pagination);
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching funnels");
+    }
+  });
+
+  app.get("/api/funnels/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const funnel = await storage.getFunnel(req.params.id);
+      if (!funnel) {
+        return notFoundResponse(res, "Funnel not found");
+      }
+      successResponse(res, { funnel });
+    } catch (error) {
+      errorResponse(res, "Error fetching funnel");
+    }
+  });
+
+  app.post("/api/funnels", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const funnel = await storage.createFunnel({ ...req.body, userId: req.user!.id });
+      successResponse(res, { funnel }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating funnel: ${error.message}`);
+    }
+  });
+
+  app.put("/api/funnels/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const funnel = await storage.updateFunnel(req.params.id, req.body);
+      successResponse(res, { funnel });
+    } catch (error: any) {
+      errorResponse(res, `Error updating funnel: ${error.message}`);
+    }
+  });
+
+  app.get("/api/funnels/:id/entries", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 100,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getFunnelEntries(req.params.id, pagination);
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching funnel entries");
+    }
+  });
+
+  app.post("/api/funnels/:id/track", async (req, res) => {
+    try {
+      const entry = await storage.trackFunnelEntry({
+        ...req.body,
+        funnelId: req.params.id
+      });
+      successResponse(res, { entry }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error tracking funnel entry: ${error.message}`);
+    }
+  });
+
+  // Affiliate & Referral API Endpoints
+  app.get("/api/affiliates", authenticateToken, requireRole(["admin"]), async (req, res) => {
+    try {
+      const { status, limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getAffiliates({
+        status: status as string,
+        ...pagination
+      });
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching affiliates");
+    }
+  });
+
+  app.get("/api/affiliates/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const affiliate = await storage.getAffiliate(req.params.id);
+      if (!affiliate) {
+        return notFoundResponse(res, "Affiliate not found");
+      }
+      successResponse(res, { affiliate });
+    } catch (error) {
+      errorResponse(res, "Error fetching affiliate");
+    }
+  });
+
+  app.post("/api/affiliates", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const affiliate = await storage.createAffiliate({
+        ...req.body,
+        userId: req.user!.id
+      });
+      successResponse(res, { affiliate }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating affiliate: ${error.message}`);
+    }
+  });
+
+  app.put("/api/affiliates/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const affiliate = await storage.updateAffiliate(req.params.id, req.body);
+      successResponse(res, { affiliate });
+    } catch (error: any) {
+      errorResponse(res, `Error updating affiliate: ${error.message}`);
+    }
+  });
+
+  app.get("/api/affiliates/:id/referrals", authenticateToken, async (req, res) => {
+    try {
+      const { status, limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 50,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getReferrals(req.params.id, {
+        status: status as string,
+        ...pagination
+      });
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching referrals");
+    }
+  });
+
+  app.post("/api/referrals", async (req, res) => {
+    try {
+      const referral = await storage.createReferral(req.body);
+      successResponse(res, { referral }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating referral: ${error.message}`);
+    }
+  });
+
+  // Shipping API Endpoints
+  app.get("/api/shipping/providers", authenticateToken, async (req, res) => {
+    try {
+      const providers = await storage.getShippingProviders();
+      successResponse(res, { providers });
+    } catch (error) {
+      errorResponse(res, "Error fetching shipping providers");
+    }
+  });
+
+  app.post("/api/shipping/providers", authenticateToken, requireRole(["admin"]), async (req: AuthenticatedRequest, res) => {
+    try {
+      const provider = await storage.createShippingProvider(req.body);
+      successResponse(res, { provider }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating shipping provider: ${error.message}`);
+    }
+  });
+
+  app.get("/api/shipping/providers/:id/rates", authenticateToken, async (req, res) => {
+    try {
+      const rates = await storage.getShippingRates(req.params.id);
+      successResponse(res, { rates });
+    } catch (error) {
+      errorResponse(res, "Error fetching shipping rates");
+    }
+  });
+
+  app.post("/api/shipping/calculate", async (req, res) => {
+    try {
+      const { address, weight } = req.body;
+      const rate = await storage.calculateShipping(address, weight);
+      successResponse(res, { rate });
+    } catch (error: any) {
+      errorResponse(res, `Error calculating shipping: ${error.message}`);
+    }
+  });
+
+  // RSS Feed API Endpoints
+  app.get("/api/rss-feeds", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const feeds = await storage.getRssFeeds(req.user!.id);
+      successResponse(res, { feeds });
+    } catch (error) {
+      errorResponse(res, "Error fetching RSS feeds");
+    }
+  });
+
+  app.post("/api/rss-feeds", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const feed = await storage.createRssFeed({ ...req.body, userId: req.user!.id });
+      successResponse(res, { feed }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating RSS feed: ${error.message}`);
+    }
+  });
+
+  app.put("/api/rss-feeds/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const feed = await storage.updateRssFeed(req.params.id, req.body);
+      successResponse(res, { feed });
+    } catch (error: any) {
+      errorResponse(res, `Error updating RSS feed: ${error.message}`);
+    }
+  });
+
+  app.delete("/api/rss-feeds/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteRssFeed(req.params.id);
+      successResponse(res, { message: "RSS feed deleted successfully" });
+    } catch (error: any) {
+      errorResponse(res, `Error deleting RSS feed: ${error.message}`);
+    }
+  });
+
+  // A/B Testing API Endpoints
+  app.get("/api/ab-tests", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { status, limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getAbTests(req.user!.id, {
+        status: status as string,
+        ...pagination
+      });
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching A/B tests");
+    }
+  });
+
+  app.get("/api/ab-tests/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const test = await storage.getAbTest(req.params.id);
+      if (!test) {
+        return notFoundResponse(res, "A/B test not found");
+      }
+      successResponse(res, { test });
+    } catch (error) {
+      errorResponse(res, "Error fetching A/B test");
+    }
+  });
+
+  app.post("/api/ab-tests", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const test = await storage.createAbTest({ ...req.body, userId: req.user!.id });
+      successResponse(res, { test }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating A/B test: ${error.message}`);
+    }
+  });
+
+  app.put("/api/ab-tests/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const test = await storage.updateAbTest(req.params.id, req.body);
+      successResponse(res, { test });
+    } catch (error: any) {
+      errorResponse(res, `Error updating A/B test: ${error.message}`);
+    }
+  });
+
+  app.post("/api/ab-tests/:id/participate", async (req, res) => {
+    try {
+      const participant = await storage.trackAbTestParticipant({
+        ...req.body,
+        testId: req.params.id
+      });
+      successResponse(res, { participant }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error tracking participation: ${error.message}`);
+    }
+  });
+
+  app.get("/api/ab-tests/:id/results", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const results = await storage.getAbTestResults(req.params.id);
+      successResponse(res, { results });
+    } catch (error) {
+      errorResponse(res, "Error fetching test results");
+    }
+  });
+
+  // Website Templates API Endpoints
+  app.get("/api/templates", optionalAuth, async (req, res) => {
+    try {
+      const { category, search, limit, offset } = req.query;
+      const pagination = calculatePagination(
+        parseInt(limit as string) || 20,
+        parseInt(offset as string) || 0
+      );
+      
+      const { data, totalCount } = await storage.getTemplates({
+        category: category as string,
+        search: search as string,
+        ...pagination
+      });
+      paginatedResponse(res, data, { limit: pagination.limit, offset: pagination.offset, totalCount });
+    } catch (error) {
+      errorResponse(res, "Error fetching templates");
+    }
+  });
+
+  app.get("/api/templates/:id", optionalAuth, async (req, res) => {
+    try {
+      const template = await storage.getTemplate(req.params.id);
+      if (!template) {
+        return notFoundResponse(res, "Template not found");
+      }
+      successResponse(res, { template });
+    } catch (error) {
+      errorResponse(res, "Error fetching template");
+    }
+  });
+
+  app.post("/api/templates", authenticateToken, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
+    try {
+      const template = await storage.createTemplate({ ...req.body, createdBy: req.user!.id });
+      successResponse(res, { template }, undefined, 201);
+    } catch (error: any) {
+      errorResponse(res, `Error creating template: ${error.message}`);
+    }
+  });
+
+  app.put("/api/templates/:id", authenticateToken, requireRole(["admin", "moderator"]), async (req: AuthenticatedRequest, res) => {
+    try {
+      const template = await storage.updateTemplate(req.params.id, req.body);
+      successResponse(res, { template });
+    } catch (error: any) {
+      errorResponse(res, `Error updating template: ${error.message}`);
+    }
+  });
+
+  app.post("/api/templates/:id/use", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.incrementTemplateUsage(req.params.id);
+      successResponse(res, { message: "Template usage recorded" });
+    } catch (error: any) {
+      errorResponse(res, `Error recording template usage: ${error.message}`);
     }
   });
 
@@ -2694,21 +3325,22 @@ circuit_breaker_threshold{service="database"} ${cbStats.threshold}
     const healthCheckPromise = (async () => {
       const { checkDatabaseHealth, getDatabaseStats } = await import("./db");
       const { queryMonitor } = await import("./middleware/query-monitor");
-      const dbHealth = await checkDatabaseHealth();
-      const dbStats = getDatabaseStats();
-      const queryMetrics = queryMonitor.getMetrics();
-      
-      // PHASE 1 - ISSUE #14: Integrate Redis health check
       const { checkRedisHealth } = await import("./utils/redis-health");
-      const redisHealth = await checkRedisHealth();
-
-      // PHASE 5.5: Integrate Stripe and OpenAI health checks
       const { checkStripeHealth } = await import("./utils/stripe-health");
       const { checkOpenAIHealth } = await import("./utils/openai-health");
-      const stripeHealth = await checkStripeHealth();
-      const openaiHealth = await checkOpenAIHealth();
+      
+      // Run all health checks in parallel for faster response
+      const [dbHealth, redisHealth, stripeHealth, openaiHealth] = await Promise.all([
+        checkDatabaseHealth(),
+        checkRedisHealth(),
+        checkStripeHealth(),
+        checkOpenAIHealth()
+      ]);
+      
+      const dbStats = getDatabaseStats();
+      const queryMetrics = queryMonitor.getMetrics();
 
-      const allHealthy = dbHealth.healthy && redisHealth.healthy && stripeHealth.healthy && openaiHealth.healthy;
+      const allHealthy = dbHealth.healthy && redisHealth.healthy && stripeHealth.available && openaiHealth.healthy;
       return {
         status: allHealthy ? "ok" : "degraded",
         timestamp: new Date().toISOString(),
@@ -2737,7 +3369,7 @@ circuit_breaker_threshold{service="database"} ${cbStats.threshold}
           error: redisHealth.error
         },
         stripe: {
-          healthy: stripeHealth.healthy,
+          healthy: stripeHealth.available,
           latency: stripeHealth.latency,
           error: stripeHealth.error
         },

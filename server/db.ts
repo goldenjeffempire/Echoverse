@@ -1,20 +1,12 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 import { logger } from './logger';
 import { queryMonitor } from './middleware/query-monitor';
 import { retryWithBackoff } from './utils/db-connection-retry';
 
-// Configure Neon WebSocket with better error handling and keepalive
-neonConfig.webSocketConstructor = ws;
-neonConfig.useSecureWebSocket = true;
-neonConfig.pipelineConnect = false; // Disable pipelining to reduce connection issues
-
-// Add custom WebSocket options for better stability
-neonConfig.wsProxy = (host) => {
-  return `${host}?keepalive=30`; // Add 30s keepalive to prevent idle disconnects
-};
+// CRITICAL FIX: Switch from Neon serverless (WebSocket) to standard pg driver (TCP)
+// The Neon serverless WebSocket driver was causing connection hang issues
 
 // P0 FIX #20: Global query timeout enforcement in pool config
 // Note: Neon serverless uses statement_timeout at connection level
@@ -107,50 +99,49 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+// CRITICAL FIX: Remove channel_binding=require which breaks Neon WebSocket connections
+process.env.DATABASE_URL = process.env.DATABASE_URL.replace('channel_binding=require', 'channel_binding=prefer');
+
 // HIGH-008 FIX: Dynamic pool configuration with auto-scaling
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
   // HIGH-008: Auto-scaling pool size based on load (3-50 connections)
-  max: parseInt(process.env.DB_POOL_MAX || '50', 10), // Increased max for auto-scaling
-  min: parseInt(process.env.DB_POOL_MIN || '3', 10), // Maintain minimum 3 connections
-  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '60000', 10), // Increased from 30s to 60s to prevent churn
-  // Connection timeout: 30 seconds to establish connection (CRITICAL FIX #5)
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '30000', 10),
-  // CRIT-006 FIX: Fail fast when pool is exhausted instead of hanging indefinitely
-  // Neon uses connectionTimeoutMillis for both connection creation and acquisition
-  // Additional application-level timeout protection via circuit breaker and query monitoring
-  // Note: Neon serverless doesn't support statement_timeout in connection options
-  // Query timeouts must be handled at application level via middleware
+  max: parseInt(process.env.DB_POOL_MAX || '20', 10), // Standard pg driver - 20 max connections
+  min: parseInt(process.env.DB_POOL_MIN || '2', 10), // Minimum 2 connections
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10), // 30s idle timeout
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '10000', 10), // 10s connection timeout
+  // Standard pg driver supports statement_timeout
+  statement_timeout: QUERY_TIMEOUT_MS, // Global query timeout
 };
 
 export const pool = new Pool(poolConfig);
 
-// CRIT-002 FIX: Wrap pool.connect() with circuit breaker
+// Pool exhaustion monitoring (circuit breaker removed - was blocking valid queries)
 const originalPoolConnect = pool.connect.bind(pool);
 pool.connect = async function() {
-  return await dbCircuitBreaker.execute(async () => {
-    const stats = getDatabaseStats();
-    const utilizationPercent = (stats.totalConnections / poolConfig.max) * 100;
-    
-    // Alert on pool exhaustion before attempting connection
-    if (utilizationPercent > 90) {
-      logger.error('ALERT: Pool exhaustion - attempting connection at critical capacity', new Error('Pool near exhaustion'), {
-        totalConnections: stats.totalConnections,
-        poolMax: poolConfig.max,
-        utilization: `${utilizationPercent.toFixed(1)}%`,
-        waitingClients: stats.waitingClients,
-      });
-    }
-    
-    return await originalPoolConnect();
-  });
+  const stats = getDatabaseStats();
+  const utilizationPercent = (stats.totalConnections / poolConfig.max) * 100;
+  
+  // Alert on pool exhaustion before attempting connection
+  if (utilizationPercent > 90) {
+    logger.warn('Pool utilization high', {
+      totalConnections: stats.totalConnections,
+      poolMax: poolConfig.max,
+      utilization: `${utilizationPercent.toFixed(1)}%`,
+      waitingClients: stats.waitingClients,
+    });
+  }
+  
+  return await originalPoolConnect();
 };
 
 // Log new database connections
 pool.on('connect', (client) => {
   logger.info('New database connection established');
-  // Note: Neon serverless doesn't support SET statement_timeout at connection level
-  // Query timeouts are enforced via middleware at 30 seconds
+  // Set statement timeout for this connection
+  client.query(`SET statement_timeout = ${QUERY_TIMEOUT_MS}`).catch(err => {
+    logger.warn('Failed to set statement_timeout', { error: err.message });
+  });
 });
 
 // CRIT-010 FIX: Sanitize database errors to prevent connection string leakage

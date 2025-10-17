@@ -6,7 +6,9 @@ import {
   auditLogs, notifications, media, analytics, abTests, abTestParticipants, funnels, 
   funnelEntries, affiliates, referrals, permissions, rolePermissions, userPermissions, subscriptions,
   passwordResetTokens, loginAttempts, accountLockouts, coupons, giftCards, giftCardTransactions,
-  aiCostTracking, aiRateLimits, webhookRetries, webhookEvents, refunds
+  aiCostTracking, aiRateLimits, webhookRetries, webhookEvents, refunds,
+  forums, forumTopics, forumReplies, landingPages, shippingProviders, shippingRates,
+  rssFeeds, websiteTemplates
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -85,6 +87,7 @@ export interface IStorage {
   
   // Comments
   getComments(postId: string): Promise<Array<Record<string, unknown>>>;
+  getCommentsByStatus(status: string): Promise<Array<Record<string, unknown>>>;
   createComment(comment: Record<string, unknown>): Promise<Record<string, unknown>>;
   updateCommentStatus(id: string, status: string): Promise<Record<string, unknown> | undefined>;
   deleteComment(id: string): Promise<void>;
@@ -494,37 +497,43 @@ export class PostgresStorage implements IStorage {
 
   // E-Commerce Products
   async getProducts(filters: { category?: string; search?: string; limit: number; offset: number }): Promise<{ data: any[]; totalCount: number }> {
-    const conditions = [eq(products.isActive, true)];
-    
-    if (filters.category) {
-      conditions.push(eq(products.category, filters.category));
-    }
-    
-    if (filters.search) {
-      conditions.push(
-        sql`(
-          ${products.name} ILIKE ${`%${filters.search}%`} OR 
-          ${products.description} ILIKE ${`%${filters.search}%`}
-        )`
-      );
-    }
-    
-    const [data, countResult] = await Promise.all([
-      db.select()
-        .from(products)
-        .where(and(...conditions))
-        .limit(filters.limit)
-        .offset(filters.offset)
-        .orderBy(desc(products.createdAt)),
-      db.select({ count: sql<number>`count(*)` })
-        .from(products)
-        .where(and(...conditions))
-    ]);
+    try {
+      const conditions = [eq(products.isActive, true)];
+      
+      if (filters.category) {
+        conditions.push(eq(products.category, filters.category));
+      }
+      
+      if (filters.search) {
+        conditions.push(
+          sql`(
+            ${products.name} ILIKE ${`%${filters.search}%`} OR 
+            ${products.description} ILIKE ${`%${filters.search}%`}
+          )`
+        );
+      }
+      
+      // Execute queries with proper error handling
+      const [data, countResult] = await Promise.all([
+        db.select()
+          .from(products)
+          .where(and(...conditions))
+          .limit(filters.limit)
+          .offset(filters.offset)
+          .orderBy(desc(products.createdAt)),
+        db.select({ count: sql<number>`count(*)` })
+          .from(products)
+          .where(and(...conditions))
+      ]);
 
-    return {
-      data,
-      totalCount: Number(countResult[0]?.count || 0)
-    };
+      return {
+        data,
+        totalCount: Number(countResult[0]?.count || 0)
+      };
+    } catch (error) {
+      console.error('[getProducts] Error:', error);
+      throw error;
+    }
   }
   
   async getProduct(id: string): Promise<any | undefined> {
@@ -931,7 +940,7 @@ export class PostgresStorage implements IStorage {
 
   async createComment(comment: any): Promise<any> {
     const result = await db.insert(comments).values(comment).returning();
-    return result?.[0];
+    return Array.isArray(result) && result.length > 0 ? result[0] : undefined;
   }
 
   async updateCommentStatus(id: string, status: string): Promise<any | undefined> {
@@ -941,6 +950,32 @@ export class PostgresStorage implements IStorage {
 
   async deleteComment(id: string): Promise<void> {
     await db.delete(comments).where(eq(comments.id, id));
+  }
+
+  async getCommentsByStatus(status: string): Promise<any[]> {
+    const results = await db.select()
+      .from(comments)
+      .leftJoin(users, eq(comments.userId, users.id))
+      .leftJoin(posts, eq(comments.postId, posts.id))
+      .where(eq(comments.status, status))
+      .orderBy(desc(comments.createdAt));
+    
+    return results.map(row => ({
+      id: row.comments.id,
+      content: row.comments.content,
+      status: row.comments.status,
+      createdAt: row.comments.createdAt,
+      postId: row.comments.postId,
+      author: row.users ? {
+        id: row.users.id,
+        name: row.users.name,
+        email: row.users.email,
+        avatar: row.users.avatar
+      } : null,
+      postTitle: row.posts?.title,
+      flagCount: row.comments.flagCount || 0,
+      spamScore: row.comments.spamScore || 0
+    }));
   }
 
   // Communities
@@ -1718,6 +1753,376 @@ export class PostgresStorage implements IStorage {
   }): Promise<any> {
     const result = await db.insert(refunds).values(refundData).returning();
     return result[0];
+  }
+
+  // Forums Management
+  async getForums(options: { search?: string; limit?: number; offset?: number; categoryId?: string }): Promise<{ data: any[]; totalCount: number }> {
+    const conditions = [];
+    
+    if (options.search) {
+      conditions.push(sql`name ILIKE ${`%${options.search}%`} OR description ILIKE ${`%${options.search}%`}`);
+    }
+    // Note: categoryId removed - forums table doesn't have this column
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    const data = await db.select().from(forums)
+      .where(whereClause)
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(forums.createdAt));
+    
+    const countQuery = whereClause 
+      ? db.select({ count: sql<number>`count(*)::int` }).from(forums).where(whereClause)
+      : db.select({ count: sql<number>`count(*)::int` }).from(forums);
+    const countResult = await countQuery;
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async getForum(id: string): Promise<any | undefined> {
+    const result = await db.select().from(forums).where(eq(forums.id, id));
+    return result[0];
+  }
+
+  async createForum(forumData: any): Promise<any> {
+    const result = await db.insert(forums).values(forumData).returning();
+    return result[0];
+  }
+
+  async updateForum(id: string, data: any): Promise<any> {
+    const result = await db.update(forums).set(data).where(eq(forums.id, id)).returning();
+    return result[0];
+  }
+
+  async getForumTopics(forumId: string, options: { limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const data = await db.select().from(forumTopics)
+      .where(eq(forumTopics.forumId, forumId))
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(forumTopics.isPinned), desc(forumTopics.createdAt));
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(forumTopics).where(eq(forumTopics.forumId, forumId));
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async createForumTopic(topicData: any): Promise<any> {
+    const result = await db.insert(forumTopics).values(topicData).returning();
+    return result[0];
+  }
+
+  async getForumReplies(topicId: string, options: { limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const data = await db.select().from(forumReplies)
+      .where(eq(forumReplies.topicId, topicId))
+      .limit(options.limit || 50)
+      .offset(options.offset || 0)
+      .orderBy(forumReplies.createdAt);
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(forumReplies).where(eq(forumReplies.topicId, topicId));
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async createForumReply(replyData: any): Promise<any> {
+    const result = await db.insert(forumReplies).values(replyData).returning();
+    return result[0];
+  }
+
+  // Landing Pages Management
+  async getLandingPages(userId: string, options: { limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const data = await db.select().from(landingPages)
+      .where(eq(landingPages.userId, userId))
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(landingPages.createdAt));
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(landingPages).where(eq(landingPages.userId, userId));
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async getLandingPage(id: string): Promise<any | undefined> {
+    const result = await db.select().from(landingPages).where(eq(landingPages.id, id));
+    return result[0];
+  }
+
+  async createLandingPage(pageData: any): Promise<any> {
+    const result = await db.insert(landingPages).values(pageData).returning();
+    return result[0];
+  }
+
+  async updateLandingPage(id: string, data: any): Promise<any> {
+    const result = await db.update(landingPages).set(data).where(eq(landingPages.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteLandingPage(id: string): Promise<void> {
+    await db.delete(landingPages).where(eq(landingPages.id, id));
+  }
+
+  async publishLandingPage(id: string): Promise<any> {
+    const result = await db.update(landingPages)
+      .set({ status: 'published', publishedAt: new Date() })
+      .where(eq(landingPages.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // Funnels Management
+  async getFunnels(userId: string, options: { limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const data = await db.select().from(funnels)
+      .where(eq(funnels.userId, userId))
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(funnels.createdAt));
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(funnels).where(eq(funnels.userId, userId));
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async getFunnel(id: string): Promise<any | undefined> {
+    const result = await db.select().from(funnels).where(eq(funnels.id, id));
+    return result[0];
+  }
+
+  async createFunnel(funnelData: any): Promise<any> {
+    const result = await db.insert(funnels).values(funnelData).returning();
+    return result[0];
+  }
+
+  async updateFunnel(id: string, data: any): Promise<any> {
+    const result = await db.update(funnels).set(data).where(eq(funnels.id, id)).returning();
+    return result[0];
+  }
+
+  async getFunnelEntries(funnelId: string, options: { limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const data = await db.select().from(funnelEntries)
+      .where(eq(funnelEntries.funnelId, funnelId))
+      .limit(options.limit || 100)
+      .offset(options.offset || 0)
+      .orderBy(desc(funnelEntries.enteredAt));
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(funnelEntries).where(eq(funnelEntries.funnelId, funnelId));
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async trackFunnelEntry(entryData: any): Promise<any> {
+    const result = await db.insert(funnelEntries).values(entryData).returning();
+    return result[0];
+  }
+
+  // Affiliate & Referral Management
+  async getAffiliates(options: { status?: string; limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const whereClause = options.status ? eq(affiliates.status, options.status) : undefined;
+    
+    const data = await db.select().from(affiliates)
+      .where(whereClause)
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(affiliates.createdAt));
+    
+    const countQuery = whereClause 
+      ? db.select({ count: sql<number>`count(*)::int` }).from(affiliates).where(whereClause)
+      : db.select({ count: sql<number>`count(*)::int` }).from(affiliates);
+    const countResult = await countQuery;
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async getAffiliate(id: string): Promise<any | undefined> {
+    const result = await db.select().from(affiliates).where(eq(affiliates.id, id));
+    return result[0];
+  }
+
+  async createAffiliate(affiliateData: any): Promise<any> {
+    const result = await db.insert(affiliates).values(affiliateData).returning();
+    return result[0];
+  }
+
+  async updateAffiliate(id: string, data: any): Promise<any> {
+    const result = await db.update(affiliates).set(data).where(eq(affiliates.id, id)).returning();
+    return result[0];
+  }
+
+  async getReferrals(affiliateId: string, options: { status?: string; limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const conditions = [eq(referrals.affiliateId, affiliateId)];
+    if (options.status) {
+      conditions.push(eq(referrals.status, options.status));
+    }
+    
+    const whereClause = and(...conditions);
+    
+    const data = await db.select().from(referrals)
+      .where(whereClause)
+      .limit(options.limit || 50)
+      .offset(options.offset || 0)
+      .orderBy(desc(referrals.createdAt));
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(referrals).where(whereClause);
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async createReferral(referralData: any): Promise<any> {
+    const result = await db.insert(referrals).values(referralData).returning();
+    return result[0];
+  }
+
+  // Shipping Management
+  async getShippingProviders(): Promise<any[]> {
+    return await db.select().from(shippingProviders).orderBy(shippingProviders.name);
+  }
+
+  async createShippingProvider(providerData: any): Promise<any> {
+    const result = await db.insert(shippingProviders).values(providerData).returning();
+    return result[0];
+  }
+
+  async getShippingRates(providerId: string): Promise<any[]> {
+    return await db.select().from(shippingRates).where(eq(shippingRates.providerId, providerId));
+  }
+
+  async calculateShipping(address: any, weight: number): Promise<any> {
+    const rates = await db.select().from(shippingRates)
+      .where(eq(shippingRates.isActive, true));
+    
+    // Filter applicable rates (using correct column names: weightMin/weightMax)
+    const applicableRate = rates.find(r => 
+      weight >= (parseFloat(r.weightMin || '0')) && 
+      weight <= (parseFloat(r.weightMax || '999999'))
+    );
+    
+    return applicableRate || rates[0];
+  }
+
+  // RSS Feed Management
+  async getRssFeeds(userId: string): Promise<any[]> {
+    return await db.select().from(rssFeeds).where(eq(rssFeeds.userId, userId));
+  }
+
+  async createRssFeed(feedData: any): Promise<any> {
+    const result = await db.insert(rssFeeds).values(feedData).returning();
+    return result[0];
+  }
+
+  async updateRssFeed(id: string, data: any): Promise<any> {
+    const result = await db.update(rssFeeds).set(data).where(eq(rssFeeds.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteRssFeed(id: string): Promise<void> {
+    await db.delete(rssFeeds).where(eq(rssFeeds.id, id));
+  }
+
+  // A/B Testing Management
+  async getAbTests(userId: string, options: { status?: string; limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const conditions = [eq(abTests.userId, userId)];
+    if (options.status) {
+      conditions.push(eq(abTests.status, options.status));
+    }
+    
+    const whereClause = and(...conditions);
+    
+    const data = await db.select().from(abTests)
+      .where(whereClause)
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(abTests.createdAt));
+    
+    const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(abTests).where(whereClause);
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async getAbTest(id: string): Promise<any | undefined> {
+    const result = await db.select().from(abTests).where(eq(abTests.id, id));
+    return result[0];
+  }
+
+  async createAbTest(testData: any): Promise<any> {
+    const result = await db.insert(abTests).values(testData).returning();
+    return result[0];
+  }
+
+  async updateAbTest(id: string, data: any): Promise<any> {
+    const result = await db.update(abTests).set(data).where(eq(abTests.id, id)).returning();
+    return result[0];
+  }
+
+  async trackAbTestParticipant(participantData: any): Promise<any> {
+    const result = await db.insert(abTestParticipants).values(participantData).returning();
+    return result[0];
+  }
+
+  async getAbTestResults(testId: string): Promise<any> {
+    const participants = await db.select().from(abTestParticipants).where(eq(abTestParticipants.testId, testId));
+    
+    const variantStats = participants.reduce((acc: any, p: any) => {
+      const variant = p.variant || 'control';
+      if (!acc[variant]) {
+        acc[variant] = { total: 0, converted: 0 };
+      }
+      acc[variant].total++;
+      if (p.converted) acc[variant].converted++;
+      return acc;
+    }, {});
+    
+    return {
+      testId,
+      totalParticipants: participants.length,
+      variants: variantStats
+    };
+  }
+
+  // Website Templates Management
+  async getTemplates(options: { category?: string; search?: string; limit?: number; offset?: number }): Promise<{ data: any[]; totalCount: number }> {
+    const conditions = [];
+    
+    if (options.category) {
+      conditions.push(eq(websiteTemplates.category, options.category));
+    }
+    if (options.search) {
+      conditions.push(sql`name ILIKE ${`%${options.search}%`} OR description ILIKE ${`%${options.search}%`}`);
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    const data = await db.select().from(websiteTemplates)
+      .where(whereClause)
+      .limit(options.limit || 20)
+      .offset(options.offset || 0)
+      .orderBy(desc(websiteTemplates.createdAt));
+    
+    const countQuery = whereClause 
+      ? db.select({ count: sql<number>`count(*)::int` }).from(websiteTemplates).where(whereClause)
+      : db.select({ count: sql<number>`count(*)::int` }).from(websiteTemplates);
+    const countResult = await countQuery;
+    
+    return { data, totalCount: countResult[0]?.count || 0 };
+  }
+
+  async getTemplate(id: string): Promise<any | undefined> {
+    const result = await db.select().from(websiteTemplates).where(eq(websiteTemplates.id, id));
+    return result[0];
+  }
+
+  async createTemplate(templateData: any): Promise<any> {
+    const result = await db.insert(websiteTemplates).values(templateData).returning();
+    return result[0];
+  }
+
+  async updateTemplate(id: string, data: any): Promise<any> {
+    const result = await db.update(websiteTemplates).set(data).where(eq(websiteTemplates.id, id)).returning();
+    return result[0];
+  }
+
+  async incrementTemplateUsage(id: string): Promise<void> {
+    // Note: usageCount column doesn't exist in schema - feature not implemented yet
+    // Future: Add usageCount column to track template popularity
+    return Promise.resolve();
   }
 }
 
