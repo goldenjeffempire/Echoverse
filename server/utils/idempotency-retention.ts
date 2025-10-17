@@ -73,7 +73,7 @@ export async function cleanupIdempotencyKeys(): Promise<RetentionStats> {
     // Clear idempotency keys from old payment intents
     const paymentIntentResult = await db
       .update(paymentIntents)
-      .set({ idempotencyKey: null })
+      .set({ idempotencyKey: sql`NULL` })
       .where(
         and(
           lte(paymentIntents.createdAt, paymentIntentCutoff),

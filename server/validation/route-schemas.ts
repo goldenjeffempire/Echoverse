@@ -562,8 +562,8 @@ export function validateRequest<T>(schema: z.ZodSchema<T>, source: 'body' | 'par
 
       // Replace the data with validated version
       if (source === 'body') req.body = validated;
-      else if (source === 'params') req.params = validated;
-      else req.query = validated;
+      else if (source === 'params') req.params = validated as any;
+      else req.query = validated as any;
 
       next();
     } catch (error) {

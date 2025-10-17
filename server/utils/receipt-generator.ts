@@ -50,14 +50,16 @@ export class ReceiptGenerator {
         ? await db.select().from(websites).where(eq(websites.id, order.websiteId))
         : [null];
 
+      const totalAmount = parseFloat(order.totalAmount || '0');
+      
       const receiptData: ReceiptData = {
         orderId: order.id,
-        orderNumber: order.orderNumber,
-        date: order.createdAt,
+        orderNumber: order.orderNumber || `ORD-${order.id.substring(0, 8)}`,
+        date: order.createdAt || new Date(),
         customer: {
           name: user?.username || 'Guest',
           email: user?.email || 'N/A',
-          address: order.shippingAddress || undefined
+          address: typeof order.shippingAddress === 'string' ? order.shippingAddress : undefined
         },
         items: (order.items as any[]).map((item: any) => ({
           name: item.name || 'Product',
@@ -65,9 +67,9 @@ export class ReceiptGenerator {
           price: item.price || 0,
           total: (item.quantity || 1) * (item.price || 0)
         })),
-        subtotal: order.totalAmount,
-        tax: order.totalAmount * 0.1,
-        total: order.totalAmount * 1.1,
+        subtotal: totalAmount,
+        tax: totalAmount * 0.1,
+        total: totalAmount * 1.1,
         paymentMethod: order.paymentMethod || 'Card',
         businessInfo: {
           name: website?.name || 'SmartAgentOS Platform',
@@ -79,10 +81,7 @@ export class ReceiptGenerator {
 
       return this.createPDFDocument(receiptData);
     } catch (error) {
-      logger.error('Receipt generation failed', {
-        orderId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logger.error('Receipt generation failed', error instanceof Error ? error : undefined, { orderId });
       throw error;
     }
   }
@@ -177,7 +176,7 @@ export class ReceiptGenerator {
       const pdfBuffer = await this.generatePDF(orderId);
       
       // FIXED AUDIT #159: Integrate with email service
-      const { sendEmail } = await import('../services/email');
+      const { sendEmail } = await import('../services/email-production.service');
       
       await sendEmail({
         to: email,
@@ -202,11 +201,7 @@ export class ReceiptGenerator {
       });
       
     } catch (error) {
-      logger.error('Failed to email receipt', {
-        orderId,
-        email,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logger.error('Failed to email receipt', error instanceof Error ? error : undefined, { orderId, email });
       throw error;
     }
   }

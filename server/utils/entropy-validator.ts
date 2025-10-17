@@ -7,7 +7,7 @@
  * Calculate Shannon entropy of a string
  * Returns bits of entropy per character
  */
-function calculateEntropy(str: string): number {
+export function calculateEntropy(str: string): number {
   const len = str.length;
   const frequencies: Record<string, number> = {};
   

@@ -44,11 +44,7 @@ export class OAuthTokenManager {
         expiresAt
       });
     } catch (error) {
-      logger.error('Failed to store OAuth tokens', {
-        userId,
-        provider,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logger.error('Failed to store OAuth tokens', error instanceof Error ? error : undefined, { userId, provider });
       throw error;
     }
   }
@@ -60,11 +56,7 @@ export class OAuthTokenManager {
     try {
       return null;
     } catch (error) {
-      logger.error('Failed to retrieve OAuth token', {
-        userId,
-        provider,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logger.error('Failed to retrieve OAuth token', error instanceof Error ? error : undefined, { userId, provider });
       return null;
     }
   }
@@ -87,11 +79,7 @@ export class OAuthTokenManager {
         refreshToken: newRefreshToken
       };
     } catch (error) {
-      logger.error('Token refresh failed', {
-        userId,
-        provider,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logger.error('Token refresh failed', error instanceof Error ? error : undefined, { userId, provider });
       return null;
     }
   }
@@ -100,11 +88,7 @@ export class OAuthTokenManager {
     try {
       logger.info('OAuth tokens revoked', { userId, provider });
     } catch (error) {
-      logger.error('Failed to revoke tokens', {
-        userId,
-        provider,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      logger.error('Failed to revoke tokens', error instanceof Error ? error : undefined, { userId, provider });
       throw error;
     }
   }
@@ -113,7 +97,7 @@ export class OAuthTokenManager {
     try {
       logger.info('Cleaning up expired OAuth tokens');
     } catch (error) {
-      logger.error('Failed to cleanup expired tokens', { error });
+      logger.error('Failed to cleanup expired tokens', error instanceof Error ? error : undefined);
     }
   }
 
