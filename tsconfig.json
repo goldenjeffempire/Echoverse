@@ -16,7 +16,7 @@
     "noImplicitThis": true,
     "alwaysStrict": true,
     "downlevelIteration": true,
-    "lib": ["esnext", "dom", "dom.iterable"],
+    "lib": ["ES2022", "dom", "dom.iterable"],
     "jsx": "preserve",
     "esModuleInterop": true,
     "skipLibCheck": true,
