@@ -3,8 +3,8 @@
  * Enables offline functionality and caching
  */
 
-const CACHE_NAME = 'smartagentos-v1';
-const RUNTIME_CACHE = 'smartagentos-runtime-v1';
+const CACHE_NAME = 'echoverse-v1';
+const RUNTIME_CACHE = 'echoverse-runtime-v1';
 
 const STATIC_ASSETS = [
   '/',
@@ -154,7 +154,7 @@ async function syncData() {
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   
-  const title = data.title || 'SmartAgentOS Notification';
+  const title = data.title || 'EchoVerse Notification';
   const options = {
     body: data.body || 'You have a new notification',
     icon: '/icon-192.png',
