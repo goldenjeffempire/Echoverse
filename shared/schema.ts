@@ -139,6 +139,42 @@ export const securityEvents = pgTable("security_events", {
   severityCheck: sql`CHECK (severity IN ('low', 'medium', 'high', 'critical'))`,
 }));
 
+// 2FA Failed Attempts Tracking - Store failed 2FA attempts for long-term analysis
+export const twoFactorAttempts = pgTable("two_factor_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ipAddress: text("ip_address").notNull(),
+  userAgent: text("user_agent"),
+  successful: boolean("successful").default(false),
+  failureReason: text("failure_reason"), // invalid_code, expired_code, rate_limited, etc.
+  attemptedAt: timestamp("attempted_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("two_factor_attempts_user_id_idx").on(table.userId),
+  ipAddressIdx: index("two_factor_attempts_ip_address_idx").on(table.ipAddress),
+  attemptedAtIdx: index("two_factor_attempts_attempted_at_idx").on(table.attemptedAt),
+  userIpIdx: index("two_factor_attempts_user_ip_idx").on(table.userId, table.ipAddress),
+}));
+
+// Idempotency Keys Retention - Track and enforce retention policy for idempotency keys
+export const idempotencyKeys = pgTable("idempotency_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  resource: text("resource").notNull(), // payment, order, webhook, etc.
+  resourceId: text("resource_id"), // ID of the created resource
+  responseStatus: integer("response_status"),
+  responseBody: jsonb("response_body"),
+  requestHash: text("request_hash"), // Hash of request body for verification
+  expiresAt: timestamp("expires_at").notNull(), // TTL for automatic cleanup
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  keyIdx: index("idempotency_keys_key_idx").on(table.key),
+  userIdIdx: index("idempotency_keys_user_id_idx").on(table.userId),
+  resourceIdx: index("idempotency_keys_resource_idx").on(table.resource),
+  expiresAtIdx: index("idempotency_keys_expires_at_idx").on(table.expiresAt),
+  createdAtIdx: index("idempotency_keys_created_at_idx").on(table.createdAt),
+}));
+
 // Email Verification Tokens
 export const emailVerificationTokens = pgTable("email_verification_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -295,6 +331,25 @@ export const productVariants = pgTable("product_variants", {
   priceCheck: sql`CHECK (price IS NULL OR price >= 0)`,
   compareAtPriceCheck: sql`CHECK (compare_at_price IS NULL OR compare_at_price >= 0)`,
   inventoryCheck: sql`CHECK (inventory >= 0)`,
+}));
+
+// Inventory Reservations - Persistent storage for inventory reservations to prevent data loss on restart
+export const inventoryReservations = pgTable("inventory_reservations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  orderId: varchar("order_id").notNull(),
+  quantity: integer("quantity").notNull(),
+  status: text("status").default("active"), // active, confirmed, released, expired
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  productIdIdx: index("inventory_reservations_product_id_idx").on(table.productId),
+  orderIdIdx: index("inventory_reservations_order_id_idx").on(table.orderId),
+  statusIdx: index("inventory_reservations_status_idx").on(table.status),
+  expiresAtIdx: index("inventory_reservations_expires_at_idx").on(table.expiresAt),
+  quantityCheck: sql`CHECK (quantity > 0)`,
+  statusCheck: sql`CHECK (status IN ('active', 'confirmed', 'released', 'expired'))`,
 }));
 
 export const orders = pgTable("orders", {

@@ -252,11 +252,17 @@ function checkStripeWebhookSecurity() {
 function checkTypeScriptStrict() {
   const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
   if (fs.existsSync(tsconfigPath)) {
-    const content = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
-    if (content.compilerOptions?.strict === true) {
-      check('TypeScript Strict', 'pass', 'Strict mode enabled');
-    } else {
-      check('TypeScript Strict', 'warn', 'TypeScript strict mode not enabled');
+    try {
+      const fileContent = fs.readFileSync(tsconfigPath, 'utf-8');
+      const contentWithoutComments = fileContent.replace(/\/\/.*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const content = JSON.parse(contentWithoutComments);
+      if (content.compilerOptions?.strict === true) {
+        check('TypeScript Strict', 'pass', 'Strict mode enabled');
+      } else {
+        check('TypeScript Strict', 'warn', 'TypeScript strict mode not enabled');
+      }
+    } catch (error) {
+      check('TypeScript Strict', 'warn', 'Could not parse tsconfig.json');
     }
   }
 }

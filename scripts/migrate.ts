@@ -75,8 +75,9 @@ async function migrateDown() {
   try {
     const { createDatabaseBackup } = await import('../server/utils/database-backup');
     const backupPath = await createDatabaseBackup({
-      reason: `pre-rollback-v${lastMigration.version}`,
-      automated: false
+      compress: true,
+      includeSchema: true,
+      includeData: true
     });
     console.log(`✅ Backup created: ${backupPath}\n`);
   } catch (backupError) {
@@ -101,8 +102,8 @@ async function migrateDown() {
     }
   }
   
-  // CRIT-007 FIX: Perform rollback with safety checks and backup option
-  await rollbackMigration(lastMigration, { createBackup: true });
+  // CRIT-007 FIX: Perform rollback with safety checks
+  await rollbackMigration(lastMigration);
   console.log('\n✅ Migration rolled back successfully\n');
   console.log('💡 Tip: Use "npm run migrate:verify" to validate database state\n');
 }
