@@ -133,6 +133,8 @@ import healthRouter from './routes/health-enhanced';
 import { calculateTax, validateTaxInput } from './services/tax-calculator';
 import { orderFulfillmentService } from './services/order-fulfillment.service';
 import { generateReceipt } from './utils/receipt-generator';
+import { deduplicateFile } from './services/file-deduplication';
+import { queryCache } from './utils/query-cache';
 
 import { validateEnvironmentVariables } from './env.validation';
 
