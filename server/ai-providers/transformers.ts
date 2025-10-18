@@ -30,6 +30,38 @@ export class TransformersProvider implements AIProvider {
     this.initPromise = this.initialize();
   }
 
+  async isAvailable(): Promise<boolean> {
+    try {
+      await this.ensureInitialized();
+      return this.initialized && !!this.textGenerator;
+    } catch {
+      return false;
+    }
+  }
+
+  async chatCompletion(params: {
+    systemPrompt: string;
+    userPrompt: string;
+    jsonMode?: boolean;
+    temperature?: number;
+    stream?: boolean;
+    onToken?: (token: string) => void;
+  }): Promise<string> {
+    await this.ensureInitialized();
+
+    const messages = [
+      { role: 'system', content: params.systemPrompt },
+      { role: 'user', content: params.userPrompt }
+    ];
+
+    const result = await this.generateChatResponse(messages, {
+      temperature: params.temperature,
+      maxTokens: 500
+    });
+
+    return result.message;
+  }
+
   private async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -51,8 +83,7 @@ export class TransformersProvider implements AIProvider {
       logger.error('Failed to initialize local AI provider', error instanceof Error ? error : undefined);
       throw new AIServiceError(
         'Failed to initialize local AI models',
-        'LOCAL_AI_INIT_ERROR',
-        { originalError: error instanceof Error ? error.message : String(error) }
+        500
       );
     }
   }
@@ -68,8 +99,7 @@ export class TransformersProvider implements AIProvider {
           available: false,
           latency: Date.now() - startTime,
           lastCheck: new Date(),
-          consecutiveFailures: 1,
-          error: 'Text generator not initialized'
+          consecutiveFailures: 1
         };
       }
 
@@ -87,8 +117,7 @@ export class TransformersProvider implements AIProvider {
         available: false,
         latency: Date.now() - startTime,
         lastCheck: new Date(),
-        consecutiveFailures: 1,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        consecutiveFailures: 1
       };
     }
   }
@@ -100,7 +129,7 @@ export class TransformersProvider implements AIProvider {
     if (!this.initialized) {
       throw new AIServiceError(
         'Local AI provider not initialized',
-        'NOT_INITIALIZED'
+        500
       );
     }
   }
@@ -147,8 +176,7 @@ export class TransformersProvider implements AIProvider {
       logger.error('Local AI generation error', error instanceof Error ? error : undefined);
       throw new AIServiceError(
         'Failed to generate text with local AI',
-        'GENERATION_ERROR',
-        { originalError: error instanceof Error ? error.message : String(error) }
+        500
       );
     }
   }
@@ -197,8 +225,7 @@ export class TransformersProvider implements AIProvider {
       logger.error('Local AI chat error', error instanceof Error ? error : undefined);
       throw new AIServiceError(
         'Failed to generate chat response with local AI',
-        'CHAT_ERROR',
-        { originalError: error instanceof Error ? error.message : String(error) }
+        500
       );
     }
   }

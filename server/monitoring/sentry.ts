@@ -2,6 +2,7 @@
  * Sentry Error Monitoring Integration
  * 
  * Production-ready error tracking and monitoring
+ * Gracefully handles missing @sentry/node dependency
  */
 
 import { logger } from '../logger';
@@ -17,6 +18,7 @@ interface SentryConfig {
 class SentryMonitoring {
   private config: SentryConfig;
   private initialized = false;
+  private sentryAvailable = false;
 
   constructor() {
     this.config = {
@@ -40,9 +42,15 @@ class SentryMonitoring {
     }
 
     try {
-      // Dynamic import for production only
-      const Sentry = await import('@sentry/node');
-      const { ProfilingIntegration } = await import('@sentry/profiling-node');
+      // Dynamic import for production only - check if package exists
+      const Sentry = await import('@sentry/node').catch(() => null);
+      if (!Sentry) {
+        logger.warn('Sentry package not installed - error monitoring disabled');
+        this.sentryAvailable = false;
+        return;
+      }
+
+      const ProfilingModule = await import('@sentry/profiling-node').catch(() => null);
 
       Sentry.init({
         dsn: this.config.dsn,
@@ -50,11 +58,11 @@ class SentryMonitoring {
         release: this.config.release,
         tracesSampleRate: this.config.tracesSampleRate,
         
-        integrations: [
-          new ProfilingIntegration(),
-        ],
+        integrations: ProfilingModule ? [
+          new ProfilingModule.ProfilingIntegration(),
+        ] : [],
 
-        beforeSend(event, hint) {
+        beforeSend(event: any, hint: any) {
           // Filter out sensitive data
           if (event.request?.headers) {
             delete event.request.headers['authorization'];
@@ -66,7 +74,7 @@ class SentryMonitoring {
           if (event.request?.query_string) {
             const filtered = event.request.query_string
               .split('&')
-              .filter(param => !param.startsWith('token=') && !param.startsWith('key='))
+              .filter((param: string) => !param.startsWith('token=') && !param.startsWith('key='))
               .join('&');
             event.request.query_string = filtered;
           }
@@ -76,6 +84,7 @@ class SentryMonitoring {
       });
 
       this.initialized = true;
+      this.sentryAvailable = true;
       logger.info('Sentry error monitoring initialized', {
         environment: this.config.environment,
         release: this.config.release,
@@ -83,12 +92,12 @@ class SentryMonitoring {
       });
     } catch (error) {
       logger.error('Failed to initialize Sentry', error as Error);
-      throw error;
+      this.sentryAvailable = false;
     }
   }
 
   captureError(error: Error, context?: Record<string, unknown>): void {
-    if (!this.initialized) {
+    if (!this.initialized || !this.sentryAvailable) {
       logger.error('Error occurred but Sentry not initialized', error, context);
       return;
     }
@@ -97,12 +106,21 @@ class SentryMonitoring {
       Sentry.captureException(error, {
         extra: context
       });
+    }).catch(() => {
+      logger.error('Failed to capture error with Sentry', error, context);
     });
   }
 
   captureMessage(message: string, level: 'info' | 'warning' | 'error' = 'info', context?: Record<string, unknown>): void {
-    if (!this.initialized) {
-      logger[level](message, context);
+    if (!this.initialized || !this.sentryAvailable) {
+      const logLevel = level === 'warning' ? 'warn' : level;
+      if (logLevel === 'info') {
+        logger.info(message, context);
+      } else if (logLevel === 'warn') {
+        logger.warn(message, context);
+      } else {
+        logger.error(message, context instanceof Error ? context : undefined, typeof context === 'object' ? context : undefined);
+      }
       return;
     }
 
@@ -111,39 +129,47 @@ class SentryMonitoring {
         level: level === 'warning' ? 'warning' : level === 'error' ? 'error' : 'info',
         extra: context
       });
+    }).catch(() => {
+      logger.error(`Failed to capture message with Sentry: ${message}`, undefined, context);
     });
   }
 
   setUser(user: { id: string; email?: string; username?: string }): void {
-    if (!this.initialized) return;
+    if (!this.initialized || !this.sentryAvailable) return;
 
     import('@sentry/node').then(Sentry => {
       Sentry.setUser(user);
+    }).catch(() => {
+      // Silently fail
     });
   }
 
   clearUser(): void {
-    if (!this.initialized) return;
+    if (!this.initialized || !this.sentryAvailable) return;
 
     import('@sentry/node').then(Sentry => {
       Sentry.setUser(null);
+    }).catch(() => {
+      // Silently fail
     });
   }
 
   addBreadcrumb(breadcrumb: { message: string; category?: string; level?: string; data?: Record<string, unknown> }): void {
-    if (!this.initialized) return;
+    if (!this.initialized || !this.sentryAvailable) return;
 
     import('@sentry/node').then(Sentry => {
       Sentry.addBreadcrumb(breadcrumb);
+    }).catch(() => {
+      // Silently fail
     });
   }
 
   startTransaction(name: string, op: string): unknown {
-    if (!this.initialized) return null;
+    if (!this.initialized || !this.sentryAvailable) return null;
 
     return import('@sentry/node').then(Sentry => {
       return Sentry.startTransaction({ name, op });
-    });
+    }).catch(() => null);
   }
 }
 
