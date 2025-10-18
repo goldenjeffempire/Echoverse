@@ -113,13 +113,13 @@ const poolConfig = {
   connectionString: process.env.DATABASE_URL,
   // HIGH-008: Auto-scaling pool size based on load (optimized for dev hot-reload)
   max: process.env.NODE_ENV === 'development' 
-    ? parseInt(process.env.DB_POOL_MAX || '10', 10)  // 10 connections in dev (enough for background jobs)
-    : parseInt(process.env.DB_POOL_MAX || '20', 10), // Standard pg driver - 20 max connections in prod
-  min: parseInt(process.env.DB_POOL_MIN || '1', 10), // Minimum 1 connection
+    ? parseInt(process.env.DB_POOL_MAX || '25', 10)  // 25 connections in dev (increased for background jobs)
+    : parseInt(process.env.DB_POOL_MAX || '30', 10), // Standard pg driver - 30 max connections in prod
+  min: parseInt(process.env.DB_POOL_MIN || '2', 10), // Minimum 2 connections
   idleTimeoutMillis: process.env.NODE_ENV === 'development'
-    ? parseInt(process.env.DB_IDLE_TIMEOUT || '10000', 10) // 10s idle timeout in dev
+    ? parseInt(process.env.DB_IDLE_TIMEOUT || '5000', 10) // 5s idle timeout in dev (faster release)
     : parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10), // 30s idle timeout in prod
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000', 10), // 5s connection timeout (fail fast)
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '10000', 10), // 10s connection timeout
   // Standard pg driver supports statement_timeout
   statement_timeout: QUERY_TIMEOUT_MS, // Global query timeout
 };

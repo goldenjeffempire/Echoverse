@@ -484,7 +484,8 @@ app.set('csrfTokenCache', csrfTokenCache);
     log(`serving on port ${port}`);
     
     // Non-blocking initialization of background services
-    (async () => {
+    // Delay startup by 10 seconds to allow server to stabilize and handle initial requests
+    setTimeout(async () => {
       try {
         // Schedule session cleanup every hour
         const SESSION_CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour
@@ -562,6 +563,6 @@ app.set('csrfTokenCache', csrfTokenCache);
       } catch (error) {
         logger.error('Error during post-startup initialization', error instanceof Error ? error : undefined);
       }
-    })();
+    }, 10000); // Delay background jobs by 10 seconds
   });
 })();
