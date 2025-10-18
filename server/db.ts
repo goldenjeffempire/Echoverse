@@ -102,19 +102,42 @@ if (!process.env.DATABASE_URL) {
 // CRITICAL FIX: Remove channel_binding=require which breaks Neon WebSocket connections
 process.env.DATABASE_URL = process.env.DATABASE_URL.replace('channel_binding=require', 'channel_binding=prefer');
 
+// CRITICAL FIX: Singleton pattern for development to prevent connection accumulation
+// During hot-reload (tsx watch mode), connections accumulate causing pool exhaustion
+declare global {
+  var __db_pool__: Pool | undefined;
+}
+
 // HIGH-008 FIX: Dynamic pool configuration with auto-scaling
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
-  // HIGH-008: Auto-scaling pool size based on load (3-50 connections)
-  max: parseInt(process.env.DB_POOL_MAX || '20', 10), // Standard pg driver - 20 max connections
-  min: parseInt(process.env.DB_POOL_MIN || '2', 10), // Minimum 2 connections
-  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10), // 30s idle timeout
-  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '10000', 10), // 10s connection timeout
+  // HIGH-008: Auto-scaling pool size based on load (optimized for dev hot-reload)
+  max: process.env.NODE_ENV === 'development' 
+    ? parseInt(process.env.DB_POOL_MAX || '10', 10)  // 10 connections in dev (enough for background jobs)
+    : parseInt(process.env.DB_POOL_MAX || '20', 10), // Standard pg driver - 20 max connections in prod
+  min: parseInt(process.env.DB_POOL_MIN || '1', 10), // Minimum 1 connection
+  idleTimeoutMillis: process.env.NODE_ENV === 'development'
+    ? parseInt(process.env.DB_IDLE_TIMEOUT || '10000', 10) // 10s idle timeout in dev
+    : parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10), // 30s idle timeout in prod
+  connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000', 10), // 5s connection timeout (fail fast)
   // Standard pg driver supports statement_timeout
   statement_timeout: QUERY_TIMEOUT_MS, // Global query timeout
 };
 
-export const pool = new Pool(poolConfig);
+// Use singleton in development to prevent connection accumulation
+let pool: Pool;
+if (process.env.NODE_ENV === 'development') {
+  if (!global.__db_pool__) {
+    global.__db_pool__ = new Pool(poolConfig);
+    logger.info('Created new database pool (development singleton)');
+  }
+  pool = global.__db_pool__;
+} else {
+  pool = new Pool(poolConfig);
+  logger.info('Created new database pool (production)');
+}
+
+export { pool };
 
 // Pool exhaustion monitoring (circuit breaker removed - was blocking valid queries)
 const originalPoolConnect = pool.connect.bind(pool);
@@ -238,11 +261,27 @@ function sanitizeDbError(err: any): Error {
   return error;
 }
 
-// CRIT-002 FIX: Create drizzle instance with circuit breaker protection
-const rawDb = drizzle({ client: pool, schema });
+// CRITICAL FIX: Singleton pattern for Drizzle ORM in development
+declare global {
+  var __drizzle_db__: ReturnType<typeof drizzle> | undefined;
+}
 
-// Export database instance directly - circuit breaker is already integrated at pool level
-export const db = rawDb;
+// CRIT-002 FIX: Create drizzle instance with circuit breaker protection
+// Use singleton in development to reuse same instance across hot-reloads
+let db: ReturnType<typeof drizzle>;
+if (process.env.NODE_ENV === 'development') {
+  if (!global.__drizzle_db__) {
+    global.__drizzle_db__ = drizzle({ client: pool, schema });
+    logger.info('Created new Drizzle ORM instance (development singleton)');
+  }
+  db = global.__drizzle_db__;
+} else {
+  db = drizzle({ client: pool, schema });
+  logger.info('Created new Drizzle ORM instance (production)');
+}
+
+// Export database instance
+export { db };
 
 export interface DatabaseStats {
   totalConnections: number;

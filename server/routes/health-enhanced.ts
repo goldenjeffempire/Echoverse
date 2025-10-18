@@ -153,7 +153,8 @@ async function checkStripe(): Promise<ComponentHealth> {
 
     const stripe = (await import('stripe')).default;
     const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-08-27.basil' as any
+      apiVersion: '2025-08-27.basil' as any,
+      timeout: 3000 // 3 second timeout
     });
 
     const startTime = Date.now();
@@ -167,8 +168,8 @@ async function checkStripe(): Promise<ComponentHealth> {
     };
   } catch (error) {
     return {
-      status: 'unhealthy',
-      message: 'Stripe connection failed',
+      status: 'degraded',
+      message: 'Stripe check timeout or failed',
       details: { error: (error as Error).message }
     };
   }
@@ -223,12 +224,32 @@ router.get('/health', async (req, res) => {
   const startTime = Date.now();
   
   try {
+    // Wrap each check with timeout to prevent hanging
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => 
+          setTimeout(() => reject(new Error(`Check timeout after ${ms}ms`)), ms)
+        )
+      ]);
+    };
+
     const [database, redis, ai, stripe, disk, memory] = await Promise.all([
-      checkDatabase(),
-      checkRedis(),
-      checkAI(),
-      checkStripe(),
-      checkDisk(),
+      withTimeout(checkDatabase(), 5000).catch((e): ComponentHealth => ({ 
+        status: 'unhealthy', message: 'Database check timeout', details: { error: e.message } 
+      })),
+      withTimeout(checkRedis(), 3000).catch((e): ComponentHealth => ({ 
+        status: 'degraded', message: 'Redis check timeout', details: { error: e.message } 
+      })),
+      withTimeout(checkAI(), 3000).catch((e): ComponentHealth => ({ 
+        status: 'degraded', message: 'AI check timeout', details: { error: e.message } 
+      })),
+      withTimeout(checkStripe(), 3000).catch((e): ComponentHealth => ({ 
+        status: 'degraded', message: 'Stripe check timeout', details: { error: e.message } 
+      })),
+      withTimeout(checkDisk(), 3000).catch((e): ComponentHealth => ({ 
+        status: 'degraded', message: 'Disk check timeout', details: { error: e.message } 
+      })),
       Promise.resolve(checkMemory())
     ]);
 
@@ -271,10 +292,24 @@ router.get('/health', async (req, res) => {
  */
 router.get('/ready', async (req, res) => {
   try {
+    // Timeout helper
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => 
+          setTimeout(() => reject(new Error(`Check timeout after ${ms}ms`)), ms)
+        )
+      ]);
+    };
+
     // Check critical components only
     const [database, ai] = await Promise.all([
-      checkDatabase(),
-      checkAI()
+      withTimeout(checkDatabase(), 5000).catch((e): ComponentHealth => ({ 
+        status: 'unhealthy', message: 'Database check timeout', details: { error: e.message } 
+      })),
+      withTimeout(checkAI(), 3000).catch((e): ComponentHealth => ({ 
+        status: 'degraded', message: 'AI check timeout', details: { error: e.message } 
+      }))
     ]);
 
     const isReady = database.status !== 'unhealthy' && 

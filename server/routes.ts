@@ -3320,86 +3320,9 @@ circuit_breaker_threshold{service="database"} ${cbStats.threshold}
     res.end(metrics + circuitBreakerMetrics);
   });
 
-  // Health check endpoint (with permissive rate limiting for monitoring)
-  app.get("/api/health", healthCheckRateLimiter, async (req, res) => {
-    const HEALTH_CHECK_TIMEOUT = 10000; // 10 second timeout
-    
-    const healthCheckPromise = (async () => {
-      const { checkDatabaseHealth, getDatabaseStats } = await import("./db");
-      const { queryMonitor } = await import("./middleware/query-monitor");
-      const { checkRedisHealth } = await import("./utils/redis-health");
-      const { checkStripeHealth } = await import("./utils/stripe-health");
-      const { checkOpenAIHealth } = await import("./utils/openai-health");
-      
-      // Run all health checks in parallel for faster response
-      const [dbHealth, redisHealth, stripeHealth, openaiHealth] = await Promise.all([
-        checkDatabaseHealth(),
-        checkRedisHealth(),
-        checkStripeHealth(),
-        checkOpenAIHealth()
-      ]);
-      
-      const dbStats = getDatabaseStats();
-      const queryMetrics = queryMonitor.getMetrics();
-
-      const allHealthy = dbHealth.healthy && redisHealth.healthy && stripeHealth.available && openaiHealth.healthy;
-      return {
-        status: allHealthy ? "ok" : "degraded",
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development',
-        database: {
-          healthy: dbHealth.healthy,
-          latency: dbHealth.latency,
-          error: dbHealth.error,
-          pool: {
-            total: dbStats.totalConnections,
-            idle: dbStats.idleConnections,
-            waiting: dbStats.waitingClients,
-            max: dbStats.poolMax,
-          },
-          queries: {
-            total: queryMetrics.totalQueries,
-            slow: queryMetrics.slowQueries,
-            failed: queryMetrics.failedQueries,
-            averageTime: Math.round(queryMetrics.averageQueryTime),
-          }
-        },
-        redis: {
-          healthy: redisHealth.healthy,
-          latency: redisHealth.latency,
-          error: redisHealth.error
-        },
-        stripe: {
-          healthy: stripeHealth.available,
-          latency: stripeHealth.latency,
-          error: stripeHealth.error
-        },
-        openai: {
-          healthy: openaiHealth.healthy,
-          latency: openaiHealth.latency,
-          error: openaiHealth.error
-        }
-      };
-    })();
-
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Health check timeout')), HEALTH_CHECK_TIMEOUT);
-    });
-
-    try {
-      const health = await Promise.race([healthCheckPromise, timeoutPromise]);
-      const allHealthy = health.status === "ok";
-      res.status(allHealthy ? 200 : 503).json(health);
-    } catch (error: any) {
-      res.status(503).json({
-        status: "timeout",
-        timestamp: new Date().toISOString(),
-        error: error.message || "Health check timed out",
-        uptime: process.uptime()
-      });
-    }
-  });
+  // Legacy health check endpoint - REMOVED
+  // Now using health-enhanced router (/api/health, /api/ready, /api/live)
+  // which provides comprehensive K8s-ready health checks without blocking rate limiters
 
   const httpServer = createServer(app);
 
