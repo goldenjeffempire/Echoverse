@@ -2,7 +2,8 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 import { logger } from './logger';
-import { queryMonitor } from './middleware/query-monitor';
+// CRITICAL FIX: queryMonitor causes recursive deadlock - disabled temporarily
+// import { queryMonitor } from './middleware/query-monitor';
 import { retryWithBackoff } from './utils/db-connection-retry';
 
 // CRITICAL FIX: Switch from Neon serverless (WebSocket) to standard pg driver (TCP)
@@ -337,10 +338,10 @@ const POOL_SCALE_CONFIG = {
 };
 
 let lastScaleOperation = 0;
-// Initialize to the same value as the pool config (10 in dev, 20 in prod)
+// Initialize to the same value as the pool config (25 in dev, 30 in prod) - matches poolConfig.max above
 let currentPoolMax = process.env.NODE_ENV === 'development'
-  ? parseInt(process.env.DB_POOL_MAX || '10', 10)
-  : parseInt(process.env.DB_POOL_MAX || '20', 10);
+  ? parseInt(process.env.DB_POOL_MAX || '25', 10)
+  : parseInt(process.env.DB_POOL_MAX || '30', 10);
 
 export function scaleConnectionPool(direction: 'up' | 'down', reason: string): boolean {
   const now = Date.now();

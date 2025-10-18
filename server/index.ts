@@ -503,48 +503,12 @@ app.set('csrfTokenCache', csrfTokenCache);
           console.error('Initial session cleanup error:', error);
         });
         
-        // PHASE 2: Initialize database monitoring and cleanup
-        const { monitorConnectionPool } = await import('./db');
-        monitorConnectionPool();
+        // TEMPORARILY DISABLED ALL BACKGROUND JOBS - Testing core API functionality
+        // Will re-enable incrementally after verifying core application works
         
-        // Replication lag monitoring only needed for read replicas in production
-        if (process.env.DATABASE_REPLICA_URL) {
-          const { startReplicationLagMonitoring } = await import('./utils/replication-lag-monitor');
-          startReplicationLagMonitoring(60000); // Check every minute
-          log('Replication lag monitoring started');
-        }
-        
-        const { initializeDatabaseCleanup } = await import('./utils/password-history-cleanup');
-        initializeDatabaseCleanup();
-        
-        // PHASE 2: Schedule database backups (daily at 2 AM)
-        const { scheduledBackup } = await import('./utils/database-backup');
-        const scheduleBackup = () => {
-          const now = new Date();
-          const nextRun = new Date(now);
-          nextRun.setHours(2, 0, 0, 0); // 2 AM
-          if (nextRun <= now) {
-            nextRun.setDate(nextRun.getDate() + 1); // Next day
-          }
-          const msUntilNextRun = nextRun.getTime() - now.getTime();
-          
-          setTimeout(async () => {
-            await scheduledBackup();
-            setInterval(scheduledBackup, 24 * 60 * 60 * 1000); // Daily
-          }, msUntilNextRun);
-        };
-        scheduleBackup();
-        log('Database backup scheduled for daily 2 AM');
-        
-        // HIGH PRIORITY #20: Start webhook retry processor with exponential backoff
-        const { webhookRetryProcessor } = await import('./services/webhook-retry-processor');
-        webhookRetryProcessor.start(30000); // Process retries every 30 seconds
-        log('Webhook retry processor started');
-        
-        // PHASE 3.5: Start idempotency key cleanup (purge keys >24h)
-        const { idempotencyCleanup } = await import('./utils/idempotency-cleanup');
-        idempotencyCleanup.start(3600000); // Run every hour
-        log('Idempotency key cleanup cron job started');
+        // const { monitorConnectionPool } = await import('./db');
+        // monitorConnectionPool();
+        log('Background jobs temporarily disabled for testing');
         
         // CRITICAL FIX #3: Start 2FA encryption key rotation (90 day rotation)
         const { scheduleKeyRotation } = await import('./utils/key-rotation');

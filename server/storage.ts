@@ -218,33 +218,18 @@ export interface IStorage {
 export class PostgresStorage implements IStorage {
   // User Management
   async getUser(id: string): Promise<User | undefined> {
-    const result = await db.query.users.findFirst({
-      where: eq(users.id, id),
-      with: {
-        sessions: true,
-      },
-    });
-    return result;
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.query.users.findFirst({
-      where: eq(users.username, username),
-      with: {
-        sessions: true,
-      },
-    });
-    return result;
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const result = await db.query.users.findFirst({
-      where: eq(users.email, email),
-      with: {
-        sessions: true,
-      },
-    });
-    return result;
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -1651,10 +1636,8 @@ export class PostgresStorage implements IStorage {
   }
 
   async getWebhookEvent(id: string): Promise<any | undefined> {
-    const result = await db.query.webhookEvents.findFirst({
-      where: eq(webhookEvents.id, id),
-    });
-    return result;
+    const result = await db.select().from(webhookEvents).where(eq(webhookEvents.id, id)).limit(1);
+    return result[0];
   }
 
   // AI Cost Alerts
