@@ -1,4 +1,4 @@
-modules = ["bash", "web", "postgresql-16", "nodejs-22"]
+modules = ["nodejs-20", "bash", "web"]
 [agent]
 expertMode = true
 integrations = ["javascript_stripe:1.0.0"]
@@ -47,7 +47,11 @@ externalPort = 3001
 localPort = 38731
 externalPort = 3000
 
+[[ports]]
+localPort = 44061
+externalPort = 3003
+
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 run = ["npm", "run", "start"]
 build = ["npm", "run", "build"]
