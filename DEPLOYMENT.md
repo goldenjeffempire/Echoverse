@@ -28,51 +28,90 @@
 
 ## 📋 Required Environment Variables
 
-### Production Environment
+### ⚠️ CRITICAL - Always Required (All Environments)
 ```bash
+# Authentication Secrets (32+ characters minimum)
+JWT_SECRET=<generate-with-openssl-rand-base64-32>
+SESSION_SECRET=<generate-with-openssl-rand-base64-32>
+
 # Database
 DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
+```
 
+### 🔒 REQUIRED - Production Environment Only
+
+**The application will not start in production without these variables.**
+
+```bash
 # Application
 NODE_ENV=production
 PORT=5000
-SESSION_SECRET=<generate-strong-secret>
 
-# Stripe Payments
+# Stripe Payments (REQUIRED)
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 VITE_STRIPE_PUBLIC_KEY=pk_live_...
 
-# AI Services
+# AI Services (REQUIRED)
 OPENAI_API_KEY=sk-proj-...
-OLLAMA_API_URL=http://localhost:11434
+OLLAMA_API_URL=http://localhost:11434  # Optional - for local Ollama
 
-# Email (Optional)
+# Redis Cache (REQUIRED in production)
+REDIS_URL=redis://user:password@host:port
+
+# CDN & CloudFront (REQUIRED in production)
+CDN_URL=https://your-cdn-domain.cloudfront.net
+CLOUDFRONT_DISTRIBUTION_ID=E1234567890ABC
+
+# Monitoring (REQUIRED in production)
+SENTRY_DSN=https://...@sentry.io/...
+
+# Security Keys (REQUIRED in production)
+TWO_FACTOR_BACKUP_ENCRYPTION_KEY=<generate-strong-32-char-secret>
+WEBHOOK_SIGNATURE_SECRET=<generate-strong-32-char-secret>
+FILE_ENCRYPTION_KEY=<generate-strong-32-char-secret>
+
+# Email Provider (REQUIRED - choose ONE)
+# Option 1: SendGrid
 SENDGRID_API_KEY=SG...
 SENDGRID_FROM_EMAIL=noreply@yourdomain.com
 SENDGRID_FROM_NAME=EchoVerse
 
-# AWS (Optional - for CDN/S3/SES)
+# Option 2: AWS SES (alternative to SendGrid)
+AWS_SES_REGION=us-east-1
+AWS_SES_ACCESS_KEY_ID=...
+AWS_SES_SECRET_ACCESS_KEY=...
+
+# File Storage - AWS S3 (REQUIRED in production)
+AWS_S3_BUCKET=your-bucket-name
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 AWS_REGION=us-east-1
-AWS_S3_BUCKET=...
-AWS_CLOUDFRONT_DISTRIBUTION_ID=...
-
-# Monitoring (Optional)
-SENTRY_DSN=https://...
-PROMETHEUS_PORT=9090
 
 # Mobile App
 CAPACITOR_APP_ID=com.echoverse.platform
 CAPACITOR_APP_NAME=EchoVerse
 PRODUCTION_URL=https://yourdomain.com
 
-# Android Build (for mobile)
+# Android Build (for mobile deployment)
 ANDROID_KEYSTORE_PATH=/path/to/keystore.jks
 ANDROID_KEYSTORE_PASSWORD=...
 ANDROID_KEY_ALIAS=...
 ANDROID_KEY_PASSWORD=...
+```
+
+### 📝 How to Generate Secrets
+```bash
+# Generate JWT_SECRET (32+ chars)
+openssl rand -base64 32
+
+# Generate SESSION_SECRET (32+ chars)
+openssl rand -base64 32
+
+# Generate encryption keys (32+ chars each)
+openssl rand -base64 32  # TWO_FACTOR_BACKUP_ENCRYPTION_KEY
+openssl rand -base64 32  # WEBHOOK_SIGNATURE_SECRET
+openssl rand -base64 32  # FILE_ENCRYPTION_KEY
 ```
 
 ## 🏗️ Deployment Steps
@@ -357,7 +396,29 @@ npm run migrate:down
 - [ ] Update DNS records (if using custom domain)
 - [ ] Configure SSL certificate (Replit handles this automatically)
 
-## 🚨 Known Limitations
+## 🚨 Known Limitations & Important Notes
+
+### Development Environment Status
+**Current Environment:** Development mode
+**Missing Production Secrets:** The following environment variables are **NOT SET** and will cause production deployment to fail:
+- `REDIS_URL` - Required for session storage and caching
+- `CDN_URL` - Required for static asset delivery
+- `SENTRY_DSN` - Required for error monitoring
+- `CLOUDFRONT_DISTRIBUTION_ID` - Required for CDN invalidation
+- `TWO_FACTOR_BACKUP_ENCRYPTION_KEY` - Required for 2FA backup codes
+- `WEBHOOK_SIGNATURE_SECRET` - Required for webhook validation
+- `FILE_ENCRYPTION_KEY` - Required for encrypted file storage
+- **Email Provider**: Either `SENDGRID_API_KEY` OR AWS SES credentials
+- **AWS S3**: `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+
+⚠️ **CRITICAL**: Deploy to production ONLY after configuring all required secrets listed above.
+
+### TypeScript Type Checking
+- `tsc --noEmit` command may timeout in Replit due to memory constraints
+- This is a known limitation of the Replit environment with large TypeScript projects
+- The application runs successfully despite this limitation
+- Type checking is performed by the LSP server during development
+- For production builds, types are validated during the build process
 
 ### Replit Environment
 - Cannot automate App Store/Play Store submissions
@@ -367,6 +428,7 @@ npm run migrate:down
 ### Dependencies
 - 9 moderate vulnerabilities in esbuild and drizzle-kit packages
 - These are development dependencies and do not affect production runtime
+- Running in development mode with mock services where needed
 
 ### Mobile App Deployment
 - Requires external developer accounts (Apple $99/year, Google $25 one-time)
