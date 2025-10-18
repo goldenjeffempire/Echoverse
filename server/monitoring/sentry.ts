@@ -59,7 +59,7 @@ class SentryMonitoring {
         tracesSampleRate: this.config.tracesSampleRate,
         
         integrations: ProfilingModule ? [
-          new ProfilingModule.ProfilingIntegration(),
+          ProfilingModule.nodeProfilingIntegration(),
         ] : [],
 
         beforeSend(event: any, hint: any) {
@@ -154,7 +154,7 @@ class SentryMonitoring {
     });
   }
 
-  addBreadcrumb(breadcrumb: { message: string; category?: string; level?: string; data?: Record<string, unknown> }): void {
+  addBreadcrumb(breadcrumb: { message: string; category?: string; level?: 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug'; data?: Record<string, unknown> }): void {
     if (!this.initialized || !this.sentryAvailable) return;
 
     import('@sentry/node').then(Sentry => {
@@ -164,12 +164,23 @@ class SentryMonitoring {
     });
   }
 
-  startTransaction(name: string, op: string): unknown {
-    if (!this.initialized || !this.sentryAvailable) return null;
+  async startSpan<T>(name: string, op: string, callback: () => Promise<T> | T): Promise<T | null> {
+    if (!this.initialized || !this.sentryAvailable) {
+      try {
+        return await callback();
+      } catch (error) {
+        this.captureError(error as Error);
+        throw error;
+      }
+    }
 
-    return import('@sentry/node').then(Sentry => {
-      return Sentry.startTransaction({ name, op });
-    }).catch(() => null);
+    try {
+      const Sentry = await import('@sentry/node');
+      return await Sentry.startSpan({ name, op }, callback);
+    } catch (error) {
+      this.captureError(error as Error);
+      throw error;
+    }
   }
 }
 

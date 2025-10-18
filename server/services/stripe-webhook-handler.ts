@@ -144,7 +144,7 @@ class StripeWebhookHandler {
       const order = await storage.getOrder(orderId);
       
       if (!order) {
-        logger.error('Order not found for payment', { orderId, paymentIntentId: paymentIntent.id });
+        logger.error('Order not found for payment', new Error('Order not found'), { orderId, paymentIntentId: paymentIntent.id });
         return;
       }
       
@@ -153,11 +153,8 @@ class StripeWebhookHandler {
         return;
       }
       
-      await storage.updateOrder(orderId, {
-        paymentStatus: 'paid',
-        stripePaymentIntentId: paymentIntent.id,
-        updatedAt: new Date()
-      });
+      // Update order status and payment information
+      await storage.updateOrderStatus(orderId, 'confirmed', 'paid');
       
       const emailService = (await import('./email')).emailService;
       await emailService.sendEmail({
@@ -190,16 +187,9 @@ class StripeWebhookHandler {
     
     try {
       if (orderId) {
-        await storage.updateOrder(orderId, {
-          paymentStatus: 'failed',
-          metadata: {
-            ...((await storage.getOrder(orderId))?.metadata || {}),
-            paymentError: paymentIntent.last_payment_error?.message
-          },
-          updatedAt: new Date()
-        });
-        
         const order = await storage.getOrder(orderId);
+        // Update order status to mark as failed
+        await storage.updateOrderStatus(orderId, 'pending', 'failed');
         if (order?.customerEmail) {
           const emailService = (await import('./email')).emailService;
           await emailService.sendEmail({
@@ -250,7 +240,6 @@ class StripeWebhookHandler {
       await storage.updateUser(userId, {
         subscriptionTier: tier,
         stripeSubscriptionId: subscription.id,
-        subscriptionStatus: subscription.status,
         updatedAt: new Date()
       });
       
@@ -315,15 +304,9 @@ class StripeWebhookHandler {
         const order = await storage.getOrder(orderId);
         
         if (order) {
-          await storage.updateOrder(orderId, {
-            paymentStatus: charge.amount_refunded === charge.amount ? 'refunded' : 'partially_refunded',
-            metadata: {
-              ...(order.metadata || {}),
-              refundedAmount: charge.amount_refunded,
-              refundedAt: new Date().toISOString()
-            },
-            updatedAt: new Date()
-          });
+          const newStatus = charge.amount_refunded === charge.amount ? 'refunded' : 'confirmed';
+          const paymentStatus = charge.amount_refunded === charge.amount ? 'refunded' : 'paid';
+          await storage.updateOrderStatus(orderId, newStatus, paymentStatus);
           
           if (order.customerEmail) {
             const emailService = (await import('./email')).emailService;

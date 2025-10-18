@@ -276,7 +276,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User Profile Management
-  app.put("/api/users/profile", authenticateToken, validateRequest(updateProfileSchema), async (req: AuthenticatedRequest, res) => {
+  app.put("/api/users/profile", authenticateToken, requireEmailVerification, validateRequest(updateProfileSchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { firstName, lastName, avatar } = req.body;
       const updates: Partial<User> = {};
@@ -339,7 +339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Change Password (authenticated) with password history check and validation
-  app.post("/api/auth/change-password", authenticateToken, passwordChangeRateLimiter, validateRequest(changePasswordSchema), async (req: AuthenticatedRequest, res) => {
+  app.post("/api/auth/change-password", authenticateToken, requireEmailVerification, passwordChangeRateLimiter, validateRequest(changePasswordSchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { currentPassword, newPassword } = req.body;
 
@@ -809,7 +809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GDPR - Account Deletion with rate limiting
-  app.delete("/api/gdpr/delete-account", authenticateToken, accountDeletionRateLimiter, async (req: AuthenticatedRequest, res) => {
+  app.delete("/api/gdpr/delete-account", authenticateToken, requireEmailVerification, accountDeletionRateLimiter, async (req: AuthenticatedRequest, res) => {
     try {
       const { password, confirmation } = req.body;
 
@@ -845,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // P0 FIX #22: Stripe payment route with idempotency protection
   const { stripeIdempotencyMiddleware, getStripeIdempotencyKey } = await import('./middleware/stripe-idempotency');
   
-  app.post("/api/create-payment-intent", authenticateToken, stripeIdempotencyMiddleware, validateRequest(createPaymentIntentSchema), async (req: AuthenticatedRequest, res) => {
+  app.post("/api/create-payment-intent", authenticateToken, requireEmailVerification, stripeIdempotencyMiddleware, validateRequest(createPaymentIntentSchema), async (req: AuthenticatedRequest, res) => {
     try {
       const { amount } = req.body;
       const idempotencyKey = getStripeIdempotencyKey(req as any);
@@ -868,7 +868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // P0 FIX #22: Subscription endpoint with idempotency protection
-  app.post('/api/get-or-create-subscription', authenticateToken, stripeIdempotencyMiddleware, validateRequest(createSubscriptionSchema), async (req: AuthenticatedRequest, res) => {
+  app.post('/api/get-or-create-subscription', authenticateToken, requireEmailVerification, stripeIdempotencyMiddleware, validateRequest(createSubscriptionSchema), async (req: AuthenticatedRequest, res) => {
     const user = req.user!;
 
     if (user.stripeSubscriptionId) {
@@ -1516,7 +1516,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // File Upload Endpoints (with media-specific rate limiting after auth)
-  app.post("/api/upload/image", authenticateToken, mediaUploadRateLimiter, (req: AuthenticatedRequest, res) => {
+  app.post("/api/upload/image", authenticateToken, requireEmailVerification, mediaUploadRateLimiter, (req: AuthenticatedRequest, res) => {
     uploadImage(req as any, res, async (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
@@ -1552,7 +1552,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/upload/file", fileUploadRateLimiter, authenticateToken, (req: AuthenticatedRequest, res) => {
+  app.post("/api/upload/file", fileUploadRateLimiter, authenticateToken, requireEmailVerification, (req: AuthenticatedRequest, res) => {
     uploadSingle(req as any, res, async (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
@@ -1670,7 +1670,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/orders", authenticateToken, idempotencyMiddleware, async (req: AuthenticatedRequest & { idempotencyKey?: string }, res) => {
+  app.post("/api/orders", authenticateToken, requireEmailVerification, idempotencyMiddleware, async (req: AuthenticatedRequest & { idempotencyKey?: string }, res) => {
     try {
       const { items, shippingAddress, paymentMethodId } = req.body;
       const idempotencyKey = req.idempotencyKey!;
