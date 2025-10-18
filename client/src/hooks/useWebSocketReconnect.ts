@@ -40,6 +40,17 @@ export function useWebSocketReconnect(
     return `${protocol}//${host}/ws`;
   };
 
+  // Calculate exponential backoff delay
+  const getReconnectDelay = (attempt: number): number => {
+    // Exponential backoff: base * 2^attempt, with max cap
+    const baseDelay = reconnectInterval;
+    const maxDelay = 30000; // Cap at 30 seconds
+    const exponentialDelay = baseDelay * Math.pow(2, attempt);
+    // Add jitter to prevent thundering herd
+    const jitter = Math.random() * 1000;
+    return Math.min(exponentialDelay + jitter, maxDelay);
+  };
+
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
@@ -67,11 +78,12 @@ export function useWebSocketReconnect(
 
         // Attempt to reconnect if not manually closed
         if (shouldReconnect.current && reconnectAttempts < maxReconnectAttempts) {
+          const delay = getReconnectDelay(reconnectAttempts);
+          console.log(`Reconnecting in ${Math.round(delay/1000)}s... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
           reconnectTimeoutRef.current = setTimeout(() => {
-            console.log(`Reconnecting... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
             setReconnectAttempts(prev => prev + 1);
             connect();
-          }, reconnectInterval);
+          }, delay);
         } else if (reconnectAttempts >= maxReconnectAttempts) {
           console.error('Max reconnect attempts reached');
         }

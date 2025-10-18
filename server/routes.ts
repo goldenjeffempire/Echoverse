@@ -123,6 +123,7 @@ import {
 } from "./validation/route-schemas";
 import { aiRateLimiter } from "./middleware/ai-rate-limiter";
 import { emailVerificationRouter } from './routes/password-reset-validation';
+import { requireEmailVerification } from './middleware/email-verification';
 import { adminRouter } from './routes/admin';
 import { register as metricsRegister } from './monitoring/metrics';
 import { passwordResetLockoutMiddleware, validateRedirectUrlMiddleware, recordPasswordResetAttempt } from './middleware/password-reset-lockout';
