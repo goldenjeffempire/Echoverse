@@ -7,8 +7,8 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     iosScheme: 'https',
-    hostname: process.env.CAPACITOR_HOSTNAME || process.env.REPL_SLUG ? `${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co` : 'localhost',
-    url: process.env.CAPACITOR_SERVER_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : undefined)
+    hostname: process.env.CAPACITOR_HOSTNAME || 'localhost',
+    url: process.env.CAPACITOR_SERVER_URL || process.env.PRODUCTION_URL || undefined
   },
   plugins: {
     SplashScreen: {

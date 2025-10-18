@@ -13,12 +13,9 @@ const ALLOWED_REDIRECT_URLS = [
   'http://localhost:5173/auth/callback',
 ];
 
-// Add production domains
-if (process.env.REPLIT_DOMAINS) {
-  const domains = process.env.REPLIT_DOMAINS.split(',');
-  domains.forEach(domain => {
-    ALLOWED_REDIRECT_URLS.push(`https://${domain}/auth/callback`);
-  });
+// Add production domain from environment
+if (process.env.PRODUCTION_URL) {
+  ALLOWED_REDIRECT_URLS.push(`${process.env.PRODUCTION_URL}/auth/callback`);
 }
 
 // Custom redirect URLs from environment (comma-separated)

@@ -431,11 +431,9 @@ export function csrfProtection(req: AuthenticatedRequest, res: Response, next: N
 export function setCsrfTokenCookie(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const sessionId = req.sessionId;
   
-  // CRITICAL FIX: Replit runs frontend in iframe, requiring sameSite='none' with secure=true
-  // Replit domains are HTTPS, so we can use secure=true in development
-  const isReplit = !!process.env.REPLIT_DOMAINS;
-  const useSecure = process.env.NODE_ENV === 'production' || isReplit;
-  const sameSitePolicy = isReplit ? 'none' : 'lax'; // 'none' for iframe, 'lax' otherwise
+  // Set secure cookies in production
+  const useSecure = process.env.NODE_ENV === 'production';
+  const sameSitePolicy = 'lax'; // Use 'lax' for standard web applications
   
   // For authenticated users, generate a session-bound token
   if (sessionId && process.env.SESSION_SECRET) {
@@ -444,11 +442,9 @@ export function setCsrfTokenCookie(req: AuthenticatedRequest, res: Response, nex
     // Set token in response header for client to use
     res.setHeader('X-CSRF-Token', boundToken);
     
-    // Use __Host- prefix only in production with secure=true (spec requirement)
-    const cookieName = process.env.NODE_ENV === 'production' && !isReplit ? '__Host-CSRF-TOKEN' : 'CSRF-TOKEN';
+    // Use __Host- prefix in production with secure=true (spec requirement)
+    const cookieName = process.env.NODE_ENV === 'production' ? '__Host-CSRF-TOKEN' : 'CSRF-TOKEN';
     
-    // CRITICAL FIX: Add Partitioned attribute for CHIPS (Cookies Having Independent Partitioned State)
-    // Required for SameSite=None cookies in iframes to work in modern browsers
     const cookieOptions: any = {
       httpOnly: false, // MUST be false so client can validate token exists
       secure: useSecure,
@@ -456,9 +452,6 @@ export function setCsrfTokenCookie(req: AuthenticatedRequest, res: Response, nex
       path: '/',
       maxAge: 4 * 60 * 60 * 1000 // 4 hours (shorter than session)
     };
-    if (isReplit && sameSitePolicy === 'none') {
-      cookieOptions.partitioned = true; // Enable CHIPS for iframe contexts
-    }
     res.cookie(cookieName, boundToken, cookieOptions);
   } else {
     // Fallback for unauthenticated users - simple double-submit cookie
@@ -471,9 +464,6 @@ export function setCsrfTokenCookie(req: AuthenticatedRequest, res: Response, nex
       path: '/',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     };
-    if (isReplit && sameSitePolicy === 'none') {
-      cookieOptions.partitioned = true; // Enable CHIPS for iframe contexts
-    }
     res.cookie('XSRF-TOKEN', token, cookieOptions);
     res.setHeader('X-CSRF-Token', token);
   }

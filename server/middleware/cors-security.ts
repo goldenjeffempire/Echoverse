@@ -13,11 +13,8 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || [
 ];
 
 // Add production domain if available
-if (process.env.REPLIT_DOMAINS) {
-  const domains = process.env.REPLIT_DOMAINS.split(',');
-  domains.forEach(domain => {
-    ALLOWED_ORIGINS.push(`https://${domain}`);
-  });
+if (process.env.PRODUCTION_URL) {
+  ALLOWED_ORIGINS.push(process.env.PRODUCTION_URL);
 }
 
 /**

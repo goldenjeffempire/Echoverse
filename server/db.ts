@@ -100,8 +100,10 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// CRITICAL FIX: Remove channel_binding=require which breaks Neon WebSocket connections
-process.env.DATABASE_URL = process.env.DATABASE_URL.replace('channel_binding=require', 'channel_binding=prefer');
+// Clean up database URL if needed
+if (process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL.replace('channel_binding=require', 'channel_binding=prefer');
+}
 
 // CRITICAL FIX: Singleton pattern for development to prevent connection accumulation
 // During hot-reload (tsx watch mode), connections accumulate causing pool exhaustion
@@ -121,8 +123,7 @@ const poolConfig = {
     ? parseInt(process.env.DB_IDLE_TIMEOUT || '5000', 10) // 5s idle timeout in dev (faster release)
     : parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10), // 30s idle timeout in prod
   connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '10000', 10), // 10s connection timeout
-  // REPLIT FIX: Remove statement_timeout from pool config - causes hanging on Replit DB
-  // statement_timeout: QUERY_TIMEOUT_MS, // Global query timeout
+  statement_timeout: QUERY_TIMEOUT_MS, // Global query timeout
 };
 
 // Use singleton in development to prevent connection accumulation
@@ -162,10 +163,10 @@ pool.connect = async function() {
 // Log new database connections
 pool.on('connect', (client) => {
   logger.info('New database connection established');
-  // REPLIT FIX: Skip statement_timeout - it's already in poolConfig and may hang on Replit DB
-  // client.query(`SET statement_timeout = ${QUERY_TIMEOUT_MS}`).catch(err => {
-  //   logger.warn('Failed to set statement_timeout', { error: err.message });
-  // });
+  // Set statement timeout for safety
+  client.query(`SET statement_timeout = ${QUERY_TIMEOUT_MS}`).catch(err => {
+    logger.warn('Failed to set statement_timeout', { error: err.message });
+  });
 });
 
 // CRIT-010 FIX: Sanitize database errors to prevent connection string leakage

@@ -1,20 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
   plugins: [
     react(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
   ],
   resolve: {
     alias: {
@@ -87,14 +77,8 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     strictPort: false,
-    // CRITICAL FIX: Allow all hosts for Replit proxy environment
-    allowedHosts: true,
-    // HMR runs through Express middleware - no separate port needed
-    // The server/vite.ts configures HMR to use the same HTTP server
     hmr: {
-      clientPort: 443,
-      protocol: 'wss',
-      host: process.env.REPLIT_DOMAINS?.split(',')[0] || undefined,
+      protocol: 'ws',
       overlay: true,
     },
     fs: {
@@ -102,7 +86,7 @@ export default defineConfig({
       deny: ["**/.*"],
     },
     watch: {
-      usePolling: true,
+      usePolling: false,
     },
   },
 });

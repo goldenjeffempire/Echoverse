@@ -1722,7 +1722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payment_method: paymentMethodId,
         confirm: false,
         capture_method: 'automatic',
-        return_url: `${process.env.REPLIT_DEV_DOMAIN}/orders`,
+        return_url: `${process.env.APP_URL || 'http://localhost:5000'}/orders`,
         metadata: {
           userId: req.user!.id,
         },
@@ -3257,6 +3257,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       successResponse(res, { message: "Template usage recorded" });
     } catch (error: any) {
       errorResponse(res, `Error recording template usage: ${error.message}`);
+    }
+  });
+
+  // Error Reporting Endpoint for Frontend Error Boundary
+  app.post("/api/errors/report", async (req, res) => {
+    try {
+      const { error, errorInfo, url, userAgent, timestamp } = req.body;
+      
+      // Log the error
+      logger.error('Frontend error reported', new Error(error), {
+        componentStack: errorInfo,
+        url,
+        userAgent,
+        timestamp,
+        ip: req.ip
+      });
+      
+      // Store in audit logs if user is authenticated
+      if ((req as any).user?.id) {
+        await storage.createAuditLog({
+          userId: (req as any).user.id,
+          action: 'frontend_error',
+          resource: 'ui',
+          resourceId: url,
+          details: { error, errorInfo, userAgent },
+          ipAddress: req.ip,
+          userAgent,
+          success: false
+        });
+      }
+      
+      successResponse(res, { message: "Error reported successfully" });
+    } catch (error: any) {
+      logger.error('Failed to report frontend error', error);
+      errorResponse(res, "Failed to report error");
     }
   });
 
