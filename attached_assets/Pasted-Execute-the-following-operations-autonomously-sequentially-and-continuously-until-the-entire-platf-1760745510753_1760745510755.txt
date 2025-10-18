@@ -1,0 +1,66 @@
+Execute the following operations autonomously, sequentially, and continuously until the entire platform is production-ready and validated for Web, iOS, and Android.
+🧠 PRIMARY OBJECTIVE
+Perform a full-stack, end-to-end inspection, remediation, completion, and hardening of the entire system — including frontend, backend, mobile apps, APIs, CI/CD, infrastructure, databases, integrations, and AI systems (local Ollama + external providers) — and deliver a verified production-grade release.
+🔧 EXECUTION TASKS
+1. CODEBASE & ARCHITECTURE
+Audit every source file and dependency (static + dynamic).
+Fix all detected bugs, warnings, and runtime errors.
+Complete missing or incomplete features.
+Remove mock data, unused assets, and dead code.
+Normalize architecture, naming, imports, and folder structure.
+Enforce consistent style rules and documentation.
+2. TESTING & QUALITY VALIDATION
+Run all unit, integration, and end-to-end tests.
+Fix any failing tests and achieve full pass coverage.
+Execute manual smoke tests on all user flows (signup, auth, payments, AI features, publishing, orders).
+Generate a comprehensive test verification report.
+3. AI INTEGRATION
+Install, configure, and validate local Ollama and all external AI providers.
+Implement fallback logic for AI service reliability.
+Verify all AI-powered features (generation, assistants, analytics, automations) operate seamlessly.
+4. UI/UX & VISUAL OPTIMIZATION
+Refine and optimize images, videos, animations, and icons.
+Ensure a modern, consistent UI/UX across all devices.
+Validate mobile responsiveness and accessibility compliance (WCAG).
+Apply smooth animations and interactive feedback.
+5. APIS, LINKS & CONTRACTS
+Validate and repair all API endpoints, URLs, redirects, and links.
+Ensure complete client–server contract accuracy.
+Regenerate or update API documentation as needed.
+6. SECURITY & COMPLIANCE
+Run OWASP vulnerability scans and patch all findings.
+Enforce TLS/SSL, RBAC, 2FA/SSO, and secure credential storage.
+Implement data encryption at rest and in transit.
+Validate full GDPR/CCPA compliance and logging.
+7. PERFORMANCE & SCALABILITY
+Optimize performance-critical paths: CDN, caching, lazy loading, database indices, and background tasks.
+Conduct load and stress testing, resolve bottlenecks, and tune resource utilization.
+Implement rate limiting, autoscaling, and optimized DB queries.
+8. MOBILE & DEPLOYMENT PREPARATION
+Build and sign store-ready iOS and Android apps.
+Validate PWA features, offline sync, and push notifications.
+Generate store metadata, app icons, screenshots, and splash assets.
+9. CI/CD, MONITORING & INFRASTRUCTURE
+Verify reproducible CI/CD pipelines with rollback and migration scripts.
+Configure real-time monitoring, logging, and alerts (Sentry, Prometheus, etc.).
+Enable automated backups and disaster recovery procedures.
+Produce a deployment playbook and runbook.
+📦 FINAL DELIVERABLES
+Clean, stable, and documented repository.
+Passing CI/CD pipelines with verified build artifacts.
+Production-ready builds for Web, iOS, and Android.
+Security and performance audit reports.
+Deployment and recovery documentation.
+Test verification summary and issue closure list.
+✅ ACCEPTANCE CRITERIA
+No critical or high-severity issues remain open.
+All features from the specification are implemented and validated.
+All AI integrations operational and stable.
+Builds pass app store validation.
+Platform remains stable under target load with full observability.
+Monitoring, alerting, and backups active and verified.
+🪶 EXECUTION RULES
+Operate autonomously; no manual approval required mid-process.
+Commit changes with clear, descriptive messages.
+Continuously update documentation, configuration, and runbooks.
+Produce a final verification report summarizing fixes, tests, and launch readiness confirmation.

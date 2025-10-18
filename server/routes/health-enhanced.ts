@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express';
-import { db } from '../db';
+import { db, pool } from '../db';
 import { logger } from '../logger';
 import { getRedisClient, checkRedisAvailability } from '../config/redis-production';
 
@@ -39,7 +39,8 @@ async function checkDatabase(): Promise<ComponentHealth> {
   const startTime = Date.now();
   
   try {
-    await db.execute('SELECT 1');
+    // Use raw pool query instead of Drizzle ORM to avoid timeout issues
+    await pool.query('SELECT 1');
     const responseTime = Date.now() - startTime;
     
     return {

@@ -128,6 +128,7 @@ import { register as metricsRegister } from './monitoring/metrics';
 import { passwordResetLockoutMiddleware, validateRedirectUrlMiddleware, recordPasswordResetAttempt } from './middleware/password-reset-lockout';
 import { attachFingerprint, sessionFingerprintValidation } from './middleware/session-fingerprint';
 import { captchaMiddleware } from './middleware/captcha';
+import healthRouter from './routes/health-enhanced';
 
 import { validateEnvironmentVariables } from './env.validation';
 
@@ -3261,6 +3262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use('/api/password-reset', emailVerificationRouter);
   app.use('/api/admin', adminRouter);
+  app.use('/api', healthRouter);
 
   // PHASE 1 - ISSUE #17: Secure metrics endpoint with authentication
   // MEDIUM FIX #14: Add circuit breaker state to metrics
