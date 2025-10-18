@@ -188,30 +188,45 @@ function closeSessionConnections(sessionId: string, userId: string, reason: stri
 
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ 
-    server,
-    path: '/ws',
-    verifyClient: (info: { origin?: string; req: { headers: { origin?: string; cookie?: string }; socket: { remoteAddress?: string } } }) => {
-      const origin = info.origin ?? info.req.headers.origin;
-      const ip = info.req.socket.remoteAddress ?? 'unknown';
-      
-      // WebSocket origin validation - strict in production
-      if (process.env.NODE_ENV === 'production') {
-        const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') ?? [];
-        
-        if (!origin || !allowedOrigins.some(allowed => origin.startsWith(allowed))) {
-          logger.warn('WebSocket connection rejected: invalid origin', { origin, ip });
-          return false;
-        }
-      }
-      
-      // Connection rate limiting per IP
-      if (!checkConnectionRateLimit(ip)) {
-        logger.warn('WebSocket connection rejected: rate limit exceeded', { ip });
-        return false;
-      }
-      
-      return true; // Allow in development for HMR and local testing
+    noServer: true,
+  });
+  
+  // Handle upgrade event manually to support both app WebSocket and Vite HMR
+  server.on('upgrade', (request, socket, head) => {
+    const pathname = request.url || '/';
+    
+    // Only handle /ws path for our app WebSocket
+    if (!pathname.startsWith('/ws')) {
+      // Let other handlers (like Vite HMR) handle this upgrade
+      return;
     }
+    
+    // Validate client before upgrade
+    const origin = request.headers.origin;
+    const ip = (socket as any).remoteAddress ?? 'unknown';
+    
+    // WebSocket origin validation - strict in production
+    if (process.env.NODE_ENV === 'production') {
+      const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') ?? [];
+      
+      if (!origin || !allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+        logger.warn('WebSocket connection rejected: invalid origin', { origin, ip });
+        socket.destroy();
+        return;
+      }
+    }
+    
+    // Connection rate limiting per IP
+    if (!checkConnectionRateLimit(ip)) {
+      logger.warn('WebSocket connection rejected: rate limit exceeded', { ip });
+      socket.destroy();
+      return;
+    }
+    
+    // Handle the WebSocket upgrade for /ws path
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
   });
 
   // PHASE 2: Register WebSocket server for graceful shutdown

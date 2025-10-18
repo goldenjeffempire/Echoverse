@@ -38,6 +38,9 @@ export async function setupVite(app: Express, server: Server) {
         overlay: true,
         // Use same port as server for WebSocket connection
         port: 5000,
+        // Specify different path for Vite HMR to avoid conflict with app WebSocket at /ws
+        clientPort: 5000,
+        path: '/__vite_hmr',
         // Let Vite auto-detect the protocol and host
         server: server, // Use existing HTTP server for WebSocket upgrades
       },
