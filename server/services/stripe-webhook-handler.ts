@@ -153,8 +153,21 @@ class StripeWebhookHandler {
         return;
       }
       
-      // Update order status and payment information
-      await storage.updateOrderStatus(orderId, 'confirmed', 'paid');
+      // CRITICAL FIX: Process fulfillment BEFORE marking as paid to ensure retry logic works
+      // This prevents "paid but unfulfilled" inconsistent state on failures
+      
+      // Step 1: Trigger order fulfillment service - errors propagate to retry logic
+      const { orderFulfillmentService } = await import('./order-fulfillment.service');
+      await orderFulfillmentService.fulfillOrder({ 
+        orderId,
+        autoNotify: false, // We handle email separately with receipt
+        updateInventory: true
+      });
+      logger.info('Order fulfillment completed successfully', { orderId });
+      
+      // Step 2: Generate PDF receipt and send email with attachment
+      const { ReceiptGenerator } = await import('../utils/receipt-generator');
+      const receiptBuffer = await ReceiptGenerator.generatePDF(orderId);
       
       const emailService = (await import('./email')).emailService;
       await emailService.sendEmail({
@@ -165,9 +178,21 @@ class StripeWebhookHandler {
           <p>Your payment has been successfully processed.</p>
           <p><strong>Order ID:</strong> ${orderId}</p>
           <p><strong>Amount:</strong> ${paymentIntent.currency.toUpperCase()} ${(paymentIntent.amount / 100).toFixed(2)}</p>
+          <p>Please find your receipt attached to this email.</p>
           <p>We'll notify you when your order ships.</p>
-        `
+        `,
+        attachments: [{
+          filename: `receipt-${orderId}.pdf`,
+          content: receiptBuffer,
+          contentType: 'application/pdf'
+        }]
       });
+      logger.info('Receipt generated and email sent successfully', { orderId });
+      
+      // Step 3: Only mark as paid AFTER all processing succeeds
+      // This ensures retries re-execute fulfillment/receipt if any step fails
+      await storage.updateOrderStatus(orderId, 'confirmed', 'paid');
+      logger.info('Order status updated to paid after successful fulfillment', { orderId });
       
       logger.info('Payment succeeded and order updated', {
         orderId,

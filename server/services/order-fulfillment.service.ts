@@ -4,7 +4,7 @@
  * Handles automated order processing, inventory updates, and notifications
  */
 
-import { db } from '../storage';
+import { db } from '../db';
 import { orders, products, productVariants, users } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { logger } from '../logger';
