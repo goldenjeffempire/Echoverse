@@ -130,6 +130,9 @@ import { passwordResetLockoutMiddleware, validateRedirectUrlMiddleware, recordPa
 import { attachFingerprint, sessionFingerprintValidation } from './middleware/session-fingerprint';
 import { captchaMiddleware } from './middleware/captcha';
 import healthRouter from './routes/health-enhanced';
+import { calculateTax, validateTaxInput } from './services/tax-calculator';
+import { orderFulfillmentService } from './services/order-fulfillment.service';
+import { generateReceipt } from './utils/receipt-generator';
 
 import { validateEnvironmentVariables } from './env.validation';
 
@@ -1688,7 +1691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      let totalAmount = 0;
+      let subtotal = 0;
       const orderItems = [];
 
       for (const item of items) {
@@ -1699,15 +1702,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const itemTotal = parseFloat(product.price) * item.quantity;
-        totalAmount += itemTotal;
+        subtotal += itemTotal;
 
         orderItems.push({
           productId: item.productId,
           quantity: item.quantity,
           price: parseFloat(product.price),
-          total: itemTotal
+          total: itemTotal,
+          taxable: true // Most products are taxable
         });
       }
+
+      // CRITICAL FIX: Calculate tax for the order
+      let taxAmount = 0;
+      let taxRate = 0;
+      try {
+        if (shippingAddress && validateTaxInput({
+          subtotal,
+          items: orderItems,
+          shippingAddress
+        })) {
+          const taxResult = await calculateTax({
+            subtotal,
+            items: orderItems,
+            shippingAddress
+          });
+          taxAmount = taxResult.taxTotal;
+          taxRate = taxResult.taxRate;
+          logger.info('Tax calculated for order', { subtotal, taxAmount, taxRate });
+        }
+      } catch (taxError) {
+        logger.warn('Tax calculation failed, proceeding without tax', taxError instanceof Error ? taxError : undefined);
+      }
+
+      const totalAmount = subtotal + taxAmount;
 
       const userEmail = req.user!.email;
       
@@ -1752,8 +1780,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (confirmedIntent.status === 'succeeded') {
-          await storage.updateOrderStatus(order.id, 'confirmed');
+          await storage.updateOrderStatus(order.id, 'confirmed', 'paid');
           order.status = 'confirmed';
+          
+          // CRITICAL FIX: Trigger order fulfillment service
+          try {
+            await orderFulfillmentService.fulfillOrder({ 
+              orderId: order.id,
+              autoNotify: true,
+              updateInventory: false // Already updated during order creation
+            });
+            logger.info('Order fulfillment initiated', { orderId: order.id });
+          } catch (fulfillmentError) {
+            logger.error('Order fulfillment failed, but order created successfully', fulfillmentError instanceof Error ? fulfillmentError : undefined, { orderId: order.id });
+          }
+          
+          // CRITICAL FIX: Generate and send payment receipt
+          try {
+            const receipt = await generateReceipt({
+              orderId: order.id,
+              amount: totalAmount,
+              tax: taxAmount,
+              subtotal: subtotal,
+              paymentMethod: 'card',
+              transactionId: paymentIntent.id,
+              customerEmail: userEmail,
+              customerName: req.user!.name || 'Customer',
+              items: orderItems.map(item => ({
+                name: item.productId,
+                quantity: item.quantity,
+                price: item.price,
+                total: item.total
+              }))
+            });
+            
+            const { emailService } = await import('./services/email');
+            await emailService.sendEmail({
+              to: userEmail,
+              subject: `Payment Receipt - Order #${order.id}`,
+              html: receipt
+            });
+            
+            logger.info('Payment receipt generated and sent', { orderId: order.id, email: userEmail });
+          } catch (receiptError) {
+            logger.error('Receipt generation failed, but payment succeeded', receiptError instanceof Error ? receiptError : undefined, { orderId: order.id });
+          }
         } else if (confirmedIntent.status === 'requires_action') {
           order.status = 'pending';
         } else {
