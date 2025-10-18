@@ -33,6 +33,8 @@ export async function setupVite(app: Express, server: Server) {
     },
     server: {
       middlewareMode: true,
+      // CRITICAL FIX: Allow all hosts for Replit proxy environment
+      allowedHosts: true,
       // CRITICAL FIX #0-2: Enable HMR with proper WebSocket configuration for Replit
       hmr: {
         overlay: true,
