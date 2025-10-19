@@ -35,6 +35,21 @@ export function AIChatbot() {
     }
   }, [messages]);
 
+  const getCsrfToken = (): string | null => {
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'XSRF-TOKEN' || name === 'CSRF-TOKEN' || name === '__Host-CSRF-TOKEN') {
+        try {
+          return decodeURIComponent(value);
+        } catch {
+          return value;
+        }
+      }
+    }
+    return null;
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -46,25 +61,37 @@ export function AIChatbot() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const userInput = input.trim();
     setInput("");
     setIsLoading(true);
 
     try {
+      const csrfToken = getCsrfToken();
+      const headers: Record<string, string> = { 
+        "Content-Type": "application/json"
+      };
+      
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+      
+      if (localStorage.getItem('token')) {
+        headers['Authorization'] = `Bearer ${localStorage.getItem('token')}`;
+      }
+
       const response = await fetch("/api/ai/chatbot", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          ...(localStorage.getItem('token') ? { 'Authorization': `Bearer ${localStorage.getItem('token')}` } : {})
-        },
+        headers,
         credentials: "include",
         body: JSON.stringify({ 
-          message: input.trim(), 
+          message: userInput, 
           context: messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')
         })
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get AI response");
+        const errorData = await response.json().catch(() => ({ message: "Failed to get AI response" }));
+        throw new Error(errorData.message || errorData.error || "Failed to get AI response");
       }
 
       const data = await response.json();
@@ -79,9 +106,11 @@ export function AIChatbot() {
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Chatbot error:", error);
+      const errorMsg = error instanceof Error ? error.message : "Failed to get AI response. Please try again.";
+      
       toast({
         title: "Error",
-        description: "Failed to get AI response. Please try again.",
+        description: errorMsg,
         variant: "destructive"
       });
       
