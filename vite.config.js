@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-
 export default defineConfig({
     plugins: [
         react(),
@@ -21,7 +20,7 @@ export default defineConfig({
         minify: "esbuild",
         target: "es2020",
         cssCodeSplit: true,
-        chunkSizeWarningLimit: 1000,
+        chunkSizeWarningLimit: 500, // ISSUE #28 FIX: Reduce from 1000 to 500kb to enforce budget
         rollupOptions: {
             output: {
                 manualChunks: {
@@ -78,10 +77,8 @@ export default defineConfig({
         host: "0.0.0.0",
         port: 5173,
         strictPort: false,
-        // Allow all hosts for flexible deployment environments
-        allowedHosts: true,
-        // HMR configuration for local development
         hmr: {
+            protocol: 'ws',
             overlay: true,
         },
         fs: {
@@ -89,7 +86,7 @@ export default defineConfig({
             deny: ["**/.*"],
         },
         watch: {
-            usePolling: true,
+            usePolling: false,
         },
     },
 });
