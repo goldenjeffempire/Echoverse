@@ -70,11 +70,6 @@ export function poolMetricsMiddleware() {
     res.on('finish', () => {
       const duration = Date.now() - startTime;
       
-      // Log slow queries
-      if (duration > 1000) {
-        console.warn(`Slow request: ${req.method} ${req.path} took ${duration}ms`);
-      }
-      
       // Emit metrics (would integrate with metrics system)
       if ((global as any).metricsCollector) {
         (global as any).metricsCollector.recordRequestDuration(req.path, duration);
@@ -113,16 +108,11 @@ export function memoryMonitorMiddleware() {
       const heapUsedMB = Math.round(usage.heapUsed / 1024 / 1024);
       const heapTotalMB = Math.round(usage.heapTotal / 1024 / 1024);
       
-      console.log(`Memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
-      
       // Alert if heap usage > 80%
       if (heapUsedMB / heapTotalMB > 0.8) {
-        console.warn('⚠️  High memory usage detected!');
-        
         // Force garbage collection if available
         if (global.gc) {
           global.gc();
-          console.log('Forced garbage collection');
         }
       }
     }

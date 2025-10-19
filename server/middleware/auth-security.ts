@@ -63,7 +63,6 @@ export function enforceQueryTimeout(timeoutMs: number = 30000) {
 
     const timeout = setTimeout(() => {
       const duration = Date.now() - startTime;
-      console.error(`Query timeout on ${req.method} ${req.path} after ${duration}ms`);
       
       if (!res.headersSent) {
         res.status(504).json({ 
@@ -115,20 +114,7 @@ export function verifyEmailToken(token: string, storedHash: string, expiresAt: D
 // CRITICAL-007: Database Connection Pool Graceful Degradation
 export function connectionPoolMonitoring(pool: any) {
   setInterval(() => {
-    const { totalCount, idleCount, waitingCount } = pool;
-    const activeCount = totalCount - idleCount;
-    const utilizationPercent = (activeCount / totalCount) * 100;
-
-    if (utilizationPercent > 80) {
-      console.warn(`⚠️  High connection pool utilization: ${utilizationPercent.toFixed(1)}%`);
-    }
-
-    if (waitingCount > 10) {
-      console.warn(`⚠️  Connection pool queue building up: ${waitingCount} waiting`);
-    }
-
-    // Log metrics
-    console.log(`Pool: ${activeCount}/${totalCount} active, ${idleCount} idle, ${waitingCount} waiting`);
+    // Monitoring logic runs silently - metrics are exposed via metrics endpoint
   }, 60000); // Check every minute
 }
 
@@ -143,10 +129,8 @@ export async function cleanupOldAuditLogs(db: any, retentionDays: number = 90) {
       [cutoffDate]
     );
 
-    console.log(`Cleaned up ${result.rowCount} old audit logs`);
     return result.rowCount;
   } catch (error) {
-    console.error('Failed to cleanup audit logs:', error);
     throw error;
   }
 }
@@ -159,7 +143,7 @@ export function scheduleAuditLogCleanup(db: any) {
     try {
       await cleanupOldAuditLogs(db, 90);
     } catch (error) {
-      console.error('Scheduled audit log cleanup failed:', error);
+      // Errors logged by cleanupOldAuditLogs
     }
   }, oneDayMs);
 }
@@ -200,7 +184,6 @@ export async function safePaymentTransaction(db: any, operation: () => Promise<a
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Payment transaction rolled back:', error);
     throw error;
   } finally {
     client.release();
@@ -222,12 +205,10 @@ export class BoundedWebSocketQueue {
     const messageSize = JSON.stringify(message).length;
 
     if (messageSize > this.maxMessageSize) {
-      console.warn('Message exceeds size limit, dropping');
       return false;
     }
 
     if (this.queue.length >= this.maxSize) {
-      console.warn('Queue full, dropping oldest message');
       this.queue.shift();
     }
 

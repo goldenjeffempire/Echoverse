@@ -41,7 +41,8 @@ class StripeWebhookHandler {
           await this.handleRefund(event.data.object as Stripe.Charge);
           break;
         default:
-          logger.info('Unhandled webhook event type', { type: event.type, eventId });
+          // Unhandled event type
+          break;
       }
 
       // Remove from retry queue on success
@@ -95,13 +96,6 @@ class StripeWebhookHandler {
 
     retry.nextRetry = new Date(Date.now() + nextRetryMs);
     this.retryQueue.set(eventId, retry);
-
-    logger.info('Webhook retry scheduled', {
-      eventId,
-      attempt: retry.attempts,
-      nextRetry: retry.nextRetry.toISOString(),
-      backoffMs: nextRetryMs
-    });
   }
 
   async processRetries(): Promise<void> {
@@ -120,7 +114,6 @@ class StripeWebhookHandler {
           const stripeClient = new stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2025-08-27.basil' });
           const event = await stripeClient.events.retrieve(eventId);
           
-          logger.info('Retrying webhook event', { eventId, attempt: retry.attempts });
           await this.handleEvent(event);
         } catch (error) {
           logger.error('Retry failed for webhook event', error as Error, { eventId, attempt: retry.attempts });
@@ -149,7 +142,6 @@ class StripeWebhookHandler {
       }
       
       if (order.paymentStatus === 'paid') {
-        logger.info('Payment already processed (idempotency)', { orderId, paymentIntentId: paymentIntent.id });
         return;
       }
       
@@ -163,7 +155,6 @@ class StripeWebhookHandler {
         autoNotify: false, // We handle email separately with receipt
         updateInventory: true
       });
-      logger.info('Order fulfillment completed successfully', { orderId });
       
       // Step 2: Generate PDF receipt and send email with attachment
       const { ReceiptGenerator } = await import('../utils/receipt-generator');
@@ -187,19 +178,10 @@ class StripeWebhookHandler {
           contentType: 'application/pdf'
         }]
       });
-      logger.info('Receipt generated and email sent successfully', { orderId });
       
       // Step 3: Only mark as paid AFTER all processing succeeds
       // This ensures retries re-execute fulfillment/receipt if any step fails
       await storage.updateOrderStatus(orderId, 'confirmed', 'paid');
-      logger.info('Order status updated to paid after successful fulfillment', { orderId });
-      
-      logger.info('Payment succeeded and order updated', {
-        orderId,
-        paymentIntentId: paymentIntent.id,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency
-      });
     } catch (error) {
       logger.error('Failed to process payment success', error as Error, { paymentIntentId: paymentIntent.id });
       throw error;
@@ -230,12 +212,6 @@ class StripeWebhookHandler {
           });
         }
       }
-      
-      logger.warn('Payment failed and notifications sent', {
-        orderId,
-        paymentIntentId: paymentIntent.id,
-        error: paymentIntent.last_payment_error?.message
-      });
     } catch (error) {
       logger.error('Failed to handle payment failure', error as Error, { paymentIntentId: paymentIntent.id });
       throw error;
@@ -266,14 +242,6 @@ class StripeWebhookHandler {
         subscriptionTier: tier,
         stripeSubscriptionId: subscription.id,
         updatedAt: new Date()
-      });
-      
-      logger.info('Subscription updated in database', {
-        userId,
-        subscriptionId: subscription.id,
-        status: subscription.status,
-        tier,
-        customerId: subscription.customer
       });
     } catch (error) {
       logger.error('Failed to update subscription', error as Error, { subscriptionId: subscription.id });
@@ -306,13 +274,6 @@ class StripeWebhookHandler {
           });
         }
       }
-      
-      logger.info('Invoice payment recorded and receipt sent', {
-        invoiceId: invoice.id,
-        amount: invoice.amount_paid,
-        userId,
-        customerId: invoice.customer
-      });
     } catch (error) {
       logger.error('Failed to handle invoice payment', error as Error, { invoiceId: invoice.id });
       throw error;
@@ -349,13 +310,6 @@ class StripeWebhookHandler {
           }
         }
       }
-      
-      logger.info('Refund processed and order updated', {
-        orderId,
-        chargeId: charge.id,
-        amount: charge.amount_refunded,
-        customerId: charge.customer
-      });
     } catch (error) {
       logger.error('Failed to handle refund', error as Error, { chargeId: charge.id });
       throw error;

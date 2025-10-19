@@ -330,7 +330,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // PHASE 1: Record successful password reset request
         await recordPasswordResetAttempt(email, ipAddress, true);
-        logger.info('Password reset requested', { userId: user.id, email });
       }
 
       // Always return same message for security (prevents user enumeration)
@@ -398,7 +397,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await invalidateAllUserSessions(user.id);
 
-      logger.info('Password changed successfully', { userId: user.id });
       res.json({ message: "Password changed successfully. Please log in again." });
     } catch (error) {
       logger.error('Password change failed', error instanceof Error ? error : undefined);
@@ -474,7 +472,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Invalidate all user sessions for security
       await invalidateAllUserSessions(validation.userId!);
 
-      logger.info('Password reset successful', { userId: validation.userId });
       res.json({ message: "Password reset successfully. Please log in with your new password." });
     } catch (error) {
       logger.error('Password reset failed', error instanceof Error ? error : undefined);
@@ -726,7 +723,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { sessionId, accessToken, refreshToken } = await createSession(user.id);
       const { password: _, ...userWithoutPassword } = user;
 
-      logger.info('Magic link login successful', { userId: user.id });
       res.json({
         message: "Login successful",
         user: userWithoutPassword,
@@ -1021,8 +1017,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 subscription.id,
                 { status: subscription.status, tier: subscription.status === 'active' ? 'pro' : 'free' }
               );
-
-              logger.info('Subscription updated', { userId: user.id, status: subscription.status, subscriptionId: subscription.id });
             }
           }
           break;
@@ -1044,14 +1038,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
 
               await auditPaymentAction(user.id, 'payment_succeeded', deletedSub.id, { action: 'subscription_cancelled' });
-              logger.info('Subscription cancelled', { userId: user.id, subscriptionId: deletedSub.id });
             }
           }
           break;
 
         case 'invoice.payment_succeeded':
           const invoice = event.data.object as Stripe.Invoice;
-          logger.info('Invoice payment succeeded', { invoiceId: invoice.id, amount: invoice.amount_paid });
           break;
 
         case 'invoice.payment_failed':
@@ -1073,7 +1065,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               paymentIntentId: succeededIntent.id,
               amount: succeededIntent.amount
             });
-            logger.info('Order confirmed after payment success', { orderId: order.id, paymentIntentId: succeededIntent.id });
           }
           break;
 
@@ -1093,13 +1084,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               paymentIntentId: failedIntent.id,
               reason: event.type
             });
-            logger.info('Order cancelled and inventory restored', { orderId: order.id, paymentIntentId: failedIntent.id });
           }
           break;
 
         case 'charge.refunded':
           const refundedCharge = event.data.object as Stripe.Charge;
-          logger.info('Charge refunded', { chargeId: refundedCharge.id, amount: refundedCharge.amount_refunded });
           break;
 
         default:
@@ -1687,7 +1676,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existingOrder = await storage.getOrderByIdempotencyKey(idempotencyKey);
       if (existingOrder) {
-        logger.info('Duplicate order request detected', { idempotencyKey: idempotencyKey.substring(0, 8) + '...', orderId: existingOrder.id });
         res.setHeader('Idempotency-Key', idempotencyKey);
         successResponse(res, { order: existingOrder, duplicate: true }, 'Order already exists (idempotent)', 200);
         return;
@@ -1731,7 +1719,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           taxAmount = taxResult.taxTotal;
           taxRate = taxResult.taxRate;
-          logger.info('Tax calculated for order', { subtotal, taxAmount, taxRate });
         }
       } catch (taxError) {
         logger.warn('Tax calculation failed, proceeding without tax', taxError instanceof Error ? taxError : undefined);
@@ -1792,7 +1779,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               autoNotify: true,
               updateInventory: false // Already updated during order creation
             });
-            logger.info('Order fulfillment initiated', { orderId: order.id });
           } catch (fulfillmentError) {
             logger.error('Order fulfillment failed, but order created successfully', fulfillmentError instanceof Error ? fulfillmentError : undefined, { orderId: order.id });
           }
@@ -1822,8 +1808,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               subject: `Payment Receipt - Order #${order.id}`,
               html: receipt
             });
-            
-            logger.info('Payment receipt generated and sent', { orderId: order.id, email: userEmail });
           } catch (receiptError) {
             logger.error('Receipt generation failed, but payment succeeded', receiptError instanceof Error ? receiptError : undefined, { orderId: order.id });
           }
@@ -1950,13 +1934,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           stripeRefundId = refund.id;
-          
-          logger.info('Stripe refund processed', {
-            orderId: order.id,
-            refundId: refund.id,
-            amount: refundAmount,
-            initiatedBy: req.user!.id,
-          });
         } catch (stripeError: any) {
           logger.error('Stripe refund failed', stripeError);
           errorResponse(res, `Stripe refund failed: ${stripeError.message}`, 500, 'STRIPE_REFUND_FAILED');
@@ -1989,15 +1966,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isFullRefund = refundAmount >= maxRefundAmount;
       const newPaymentStatus = isFullRefund ? 'refunded' : 'partial_refund';
       await storage.updateOrderStatus(orderId, isFullRefund ? 'refunded' : order.status as string, newPaymentStatus);
-      
-      logger.info('Order refund created', {
-        orderId: order.id,
-        refundId: refund.id,
-        amount: refundAmount,
-        isFullRefund,
-        inventoryRestored: restoreInventory,
-        initiatedBy: req.user!.id,
-      });
       
       successResponse(res, { 
         refund, 

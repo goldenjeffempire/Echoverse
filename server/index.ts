@@ -33,7 +33,6 @@ import { compressionMiddleware, poolMetricsMiddleware, preloadMiddleware, memory
 
 validateEnvironmentVariables();
 validateCriticalEnvVars();
-log('Environment variables validated successfully');
 
 // CRITICAL FIX #1: Explicitly validate JWT_SECRET before starting server
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
@@ -49,10 +48,6 @@ if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
   process.exit(1);
 }
 
-logger.info('Critical security secrets validated', {
-  jwtSecretLength: process.env.JWT_SECRET.length,
-  sessionSecretLength: process.env.SESSION_SECRET.length
-});
 
 // P0 ISSUE #1 FIX: Missing Production Environment Variables (COMPREHENSIVE)
 if (process.env.NODE_ENV === 'production') {
@@ -103,21 +98,10 @@ if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   }
   
-  logger.info('Production environment variables validated', {
-    redisConfigured: !!process.env.REDIS_URL,
-    cdnConfigured: !!process.env.CDN_URL,
-    sentryConfigured: !!process.env.SENTRY_DSN,
-    cloudfrontConfigured: !!process.env.CLOUDFRONT_DISTRIBUTION_ID,
-    emailProvider: process.env.SENDGRID_API_KEY ? 'SendGrid' : 'AWS SES',
-    fileStorage: 'AWS S3'
-  });
 }
 
 // Mock Ollama removed - now using production-ready local AI with Transformers.js
 // Real local AI models will be downloaded automatically on first use
-if (process.env.NODE_ENV === 'development') {
-  logger.info('Using local Transformers.js AI provider (production-ready)');
-}
 
 // P0 FIX #6: Redis health check on startup when configured
 if (process.env.REDIS_URL) {
@@ -127,7 +111,6 @@ if (process.env.REDIS_URL) {
       const redisClient = createClient({ url: process.env.REDIS_URL });
       await redisClient.connect();
       await redisClient.ping();
-      logger.info('Redis connection validated successfully');
       await redisClient.disconnect();
     } catch (error) {
       logger.error('Redis health check failed', error instanceof Error ? error : undefined);
@@ -149,7 +132,6 @@ if (process.env.NODE_ENV === 'production') {
     setInterval(async () => {
       const now = new Date();
       if (now.getHours() === 3 && now.getMinutes() < 15) {
-        logger.info('Starting scheduled backup verification');
         const result = await BackupVerifier.verifyLatestBackup();
         
         if (!result.valid) {
@@ -157,17 +139,9 @@ if (process.env.NODE_ENV === 'production') {
             issues: result.issues,
             backupDate: result.backupDate
           });
-        } else {
-          logger.info('Backup verification passed', {
-            backupDate: result.backupDate,
-            size: result.size,
-            records: result.records
-          });
         }
       }
     }, 15 * 60 * 1000); // Check every 15 minutes
-    
-    logger.info('Backup verification scheduled for daily execution at 3 AM');
   }).catch(err => {
     logger.error('Failed to initialize backup verification', err);
   });
@@ -179,7 +153,6 @@ if (process.env.RUN_MIGRATIONS_ON_STARTUP === 'true') {
   import('./utils/database-migrations').then(async ({ runPendingMigrations }) => {
     try {
       await runPendingMigrations();
-      logger.info('Database migrations completed successfully');
     } catch (error) {
       logger.error('Database migration failed', error instanceof Error ? error : undefined);
       if (process.env.NODE_ENV === 'production') {
@@ -190,8 +163,6 @@ if (process.env.RUN_MIGRATIONS_ON_STARTUP === 'true') {
   }).catch(err => {
     logger.error('Failed to import migrations module', err);
   });
-} else {
-  logger.info('Skipping automatic migrations - use npm run migrate:up to run manually');
 }
 
 const app = express();
@@ -454,9 +425,7 @@ app.set('csrfTokenCache', csrfTokenCache);
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
-    log('Initializing Vite development server...');
     await setupVite(app, server);
-    log('Vite development server ready');
   } else {
     serveStatic(app);
   }
@@ -495,7 +464,6 @@ app.set('csrfTokenCache', csrfTokenCache);
         setInterval(async () => {
           try {
             await storage.cleanupExpiredSessions();
-            log('Expired sessions cleaned up');
           } catch (error) {
             console.error('Error cleaning up sessions:', error);
           }
@@ -506,27 +474,17 @@ app.set('csrfTokenCache', csrfTokenCache);
           console.error('Initial session cleanup error:', error);
         });
         
-        // TEMPORARILY DISABLED ALL BACKGROUND JOBS - Testing core API functionality
-        // Will re-enable incrementally after verifying core application works
-        
-        // const { monitorConnectionPool } = await import('./db');
-        // monitorConnectionPool();
-        log('Background jobs temporarily disabled for testing');
-        
         // CRITICAL FIX #3: Start 2FA encryption key rotation (90 day rotation)
         const { scheduleKeyRotation } = await import('./utils/key-rotation');
         scheduleKeyRotation();
-        log('2FA encryption key rotation scheduler started');
         
         // PHASE 1 - ISSUE #15: Register graceful shutdown handler with 30s drain
         const { setupGracefulShutdown } = await import('./utils/graceful-shutdown');
         setupGracefulShutdown(server);
-        log('Graceful shutdown handlers registered');
         
         // SECURITY: Initialize quarantine directory for file upload security
         const { initializeQuarantineDirectory } = await import('./middleware/file-upload-security');
         await initializeQuarantineDirectory();
-        log('File upload security initialized (quarantine directory ready)');
       } catch (error) {
         logger.error('Error during post-startup initialization', error instanceof Error ? error : undefined);
       }

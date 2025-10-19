@@ -42,8 +42,6 @@ class SMTPEmailService implements EmailService {
         html: options.html,
         text: options.text || options.html.replace(/<[^>]*>/g, ''),
       });
-      
-      logger.info('Email sent via SMTP', { to: options.to, subject: options.subject });
     } catch (error) {
       logger.error('SMTP email failed', error instanceof Error ? error : undefined);
       throw error;
@@ -71,8 +69,6 @@ class SendGridEmailService implements EmailService {
         html: options.html,
         text: options.text || options.html.replace(/<[^>]*>/g, ''),
       });
-      
-      logger.info('Email sent via SendGrid', { to: options.to, subject: options.subject });
     } catch (error) {
       logger.error('SendGrid email failed', error instanceof Error ? error : undefined);
       throw error;
@@ -108,8 +104,6 @@ class SESEmailService implements EmailService {
           },
         },
       }).promise();
-      
-      logger.info('Email sent via AWS SES', { to: options.to, subject: options.subject });
     } catch (error) {
       logger.error('AWS SES email failed', error instanceof Error ? error : undefined);
       throw error;
@@ -119,11 +113,7 @@ class SESEmailService implements EmailService {
 
 class MockEmailService implements EmailService {
   async sendEmail(options: EmailOptions): Promise<void> {
-    logger.info('📧 Mock Email (not actually sent)', {
-      to: options.to,
-      subject: options.subject,
-      html: options.html.substring(0, 200) + '...',
-    });
+    // Mock email - not actually sent
   }
 }
 
