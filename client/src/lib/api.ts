@@ -68,19 +68,37 @@ class ApiClient {
 
     // Add CSRF token header for double-submit cookie pattern
     // Required for POST, PUT, PATCH, DELETE requests
-    const method = options.method?.toUpperCase();
-    if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const method = options.method?.toUpperCase() || 'GET';
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       const csrfToken = this.getCsrfToken();
       if (csrfToken) {
         headers['X-CSRF-Token'] = csrfToken;
       }
     }
 
-    let response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-      credentials: 'include', // Ensure cookies are sent with requests
-    });
+    // ISSUE #33 FIX: Request deduplication for GET requests
+    // Import at top of file is required
+    const fetchFn = async () => {
+      return await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+        credentials: 'include', // Ensure cookies are sent with requests
+      });
+    };
+
+    // Only deduplicate GET requests (safe, idempotent operations)
+    let response: Response;
+    if (method === 'GET') {
+      const { requestDeduplicator } = await import('./request-deduplication');
+      response = await requestDeduplicator.deduplicate(
+        endpoint,
+        method,
+        fetchFn,
+        options.body
+      );
+    } else {
+      response = await fetchFn();
+    }
 
     if (response.status === 403 && this.refreshToken && retryCount === 0) {
       if (!this.refreshPromise) {
