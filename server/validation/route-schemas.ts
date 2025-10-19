@@ -311,7 +311,7 @@ export const optimizeSEOSchema = z.object({
 export const chatbotSchema = z.object({
   message: z.string().min(1).max(2000),
   conversationId: z.string().optional(),
-  context: z.record(z.string(), z.unknown()).optional(),
+  context: z.string().max(5000).optional(),
 });
 
 export const analyzeContentSchema = z.object({
