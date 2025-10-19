@@ -34,7 +34,6 @@ export function validateCriticalEnvVars() {
       throw new Error('FILE_ENCRYPTION_KEY must be at least 32 characters');
     }
   } else if (!process.env.FILE_ENCRYPTION_KEY) {
-    console.warn('⚠️  FILE_ENCRYPTION_KEY not set - using development default (not secure for production)');
     process.env.FILE_ENCRYPTION_KEY = 'dev-encryption-key-not-for-production-use-only-32chars-minimum';
   }
 }
@@ -57,7 +56,6 @@ export function csrfProtection() {
 // CRITICAL-004: WebSocket Null Origin Protection
 export function websocketOriginValidation(origin: string | undefined): boolean {
   if (!origin) {
-    console.warn('WebSocket connection attempted with null origin');
     return false;
   }
 
@@ -196,7 +194,6 @@ export function validateStripeWebhook(req: Request): boolean {
   const tolerance = 300; // 5 minutes
 
   if (Math.abs(now - requestTime) > tolerance) {
-    console.warn('Stripe webhook timestamp outside tolerance window');
     return false;
   }
 
@@ -214,7 +211,6 @@ export function validateStripeWebhook(req: Request): boolean {
   
   // Check if we've seen this exact webhook before (replay attack detection)
   if (webhookNonceCache.has(nonce)) {
-    console.warn('Stripe webhook replay attack detected - duplicate nonce', { nonce: nonce.substring(0, 20) + '...' });
     return false;
   }
   
