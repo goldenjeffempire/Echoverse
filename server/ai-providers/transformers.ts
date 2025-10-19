@@ -14,6 +14,11 @@ env.localModelPath = './models';
 env.allowRemoteModels = true;
 env.allowLocalModels = true;
 
+// Suppress ONNX runtime warnings
+if (typeof process !== 'undefined' && process.env) {
+  process.env.ONNXRUNTIME_LOG_LEVEL = 'error';
+}
+
 export class TransformersProvider implements AIProvider {
   name = 'Transformers.js (Local)';
   
@@ -82,19 +87,11 @@ export class TransformersProvider implements AIProvider {
     if (this.initialized) return;
 
     try {
-      logger.info('Initializing Transformers.js local AI provider...', {
-        textModel: this.TEXT_MODEL,
-        chatModel: this.CHAT_MODEL
-      });
 
       // Initialize text generation pipeline with lightweight model
       this.textGenerator = await pipeline('text-generation', this.TEXT_MODEL);
       
       this.initialized = true;
-      logger.info('Local AI provider initialized successfully', {
-        provider: this.name,
-        model: this.TEXT_MODEL
-      });
     } catch (error) {
       logger.error('Failed to initialize local AI provider', error instanceof Error ? error : undefined);
       throw new AIServiceError(

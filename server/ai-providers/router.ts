@@ -51,14 +51,10 @@ class AIProviderRouter {
       // Only use OpenAI as primary if explicitly forced
       this.primaryProvider = new OpenAIProvider();
       this.fallbackProvider = null;
-      logger.info('Using OpenAI as primary AI provider (explicitly configured)');
     } else {
       // Default: Use local Transformers.js as primary, OpenAI as fallback
       this.primaryProvider = new TransformersProvider();
       this.fallbackProvider = this.config.fallback === 'openai' ? new OpenAIProvider() : null;
-      logger.info('Using local Transformers.js as primary AI provider', {
-        fallback: this.fallbackProvider ? 'OpenAI' : 'None'
-      });
     }
     
     this.primaryHealth = {
@@ -82,11 +78,6 @@ class AIProviderRouter {
       openUntil: null
     };
     
-    const fallbackInfo = this.fallbackProvider ? 'OpenAI' : 'None';
-    logger.info('AI Provider initialized', {
-      primary: this.primaryProvider.name,
-      fallback: fallbackInfo
-    });
     
     if (!this.fallbackProvider) {
       logger.warn('No fallback provider configured', {
@@ -185,20 +176,9 @@ class AIProviderRouter {
         await this.sendAlert(this.primaryProvider.name, newFailures, latestError);
       } else if (isAvailable && this.alertSent) {
         // Provider recovered - log recovery
-        logger.info('AI Provider recovered', {
-          provider: this.primaryProvider.name,
-          wasDown: this.alertSent
-        });
         this.alertSent = false;
       }
       
-      logger.debug('Primary provider health check', {
-        provider: this.primaryProvider.name,
-        available: isAvailable,
-        latency,
-        consecutiveFailures: this.primaryHealth.consecutiveFailures,
-        cooldownReset: shouldReset && !isAvailable
-      });
     } catch (error) {
       latestError = error instanceof Error ? error.message : 'unknown error';
       const latency = Date.now() - startTime;
@@ -259,12 +239,6 @@ class AIProviderRouter {
         aiProviderConsecutiveFailures.set({ provider: this.fallbackProvider.name }, newFailures);
         aiProviderLatencyMs.observe({ provider: this.fallbackProvider.name }, latency);
         
-        logger.debug('Fallback provider health check', {
-          provider: this.fallbackProvider.name,
-          available: isAvailable,
-          latency,
-          consecutiveFailures: this.fallbackHealth.consecutiveFailures
-        });
       } catch (error) {
         const latency = Date.now() - fallbackStartTime;
         const prevHealth = this.fallbackHealth || { consecutiveFailures: 0, lastCheck: new Date() } as ProviderHealth;
@@ -297,9 +271,6 @@ class AIProviderRouter {
   private checkCircuitBreaker(): boolean {
     if (this.circuitBreaker.state === 'open') {
       if (this.circuitBreaker.openUntil && new Date() > this.circuitBreaker.openUntil) {
-        logger.info('Circuit breaker transitioning to half-open', {
-          failures: this.circuitBreaker.failures
-        });
         this.circuitBreaker.state = 'half-open';
         
         // Update circuit breaker state metric (1 = half-open)
@@ -332,9 +303,6 @@ class AIProviderRouter {
   }
 
   private recordSuccess(): void {
-    if (this.circuitBreaker.state === 'half-open') {
-      logger.info('Circuit breaker closing after successful request');
-    }
     this.circuitBreaker.failures = 0;
     this.circuitBreaker.state = 'closed';
     this.circuitBreaker.openUntil = null;
@@ -352,12 +320,6 @@ class AIProviderRouter {
     for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
       try {
         const result = await fn();
-        if (attempt > 0) {
-          logger.info('Retry succeeded', {
-            provider: providerName,
-            attempt: attempt + 1
-          });
-        }
         return result;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -385,14 +347,6 @@ class AIProviderRouter {
       this.requestLogs.shift();
     }
     
-    logger.info('AI request completed', {
-      id: log.id,
-      provider: log.provider,
-      duration: log.duration,
-      success: log.success,
-      tokenUsage: log.tokenUsage,
-      error: log.error
-    });
   }
 
   async chatCompletion(params: {
@@ -472,9 +426,6 @@ class AIProviderRouter {
       try {
         const isAvailable = await this.fallbackProvider.isAvailable();
         if (isAvailable) {
-          logger.info('Using fallback provider', {
-            provider: this.fallbackProvider.name
-          });
           
           const response = await this.retryWithBackoff(
             () => this.fallbackProvider!.chatCompletion(params),

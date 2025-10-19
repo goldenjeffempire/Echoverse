@@ -48,11 +48,6 @@ export class OpenAIProvider implements AIProvider {
       const content = response.choices[0].message.content || '';
       
       if (response.usage) {
-        logger.debug('OpenAI token usage', {
-          promptTokens: response.usage.prompt_tokens,
-          completionTokens: response.usage.completion_tokens,
-          totalTokens: response.usage.total_tokens
-        });
         
         // Track AI costs
         costTracker.track({
