@@ -36,6 +36,84 @@ export interface ReceiptData {
   };
 }
 
+export interface GenerateReceiptParams {
+  orderId: string;
+  amount: number;
+  tax: number;
+  subtotal: number;
+  paymentMethod: string;
+  transactionId: string;
+  customerEmail: string;
+  customerName: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    total: number;
+  }>;
+}
+
+export async function generateReceipt(params: GenerateReceiptParams): Promise<string> {
+  const { orderId, amount, tax, subtotal, paymentMethod, transactionId, customerEmail, customerName, items } = params;
+  
+  return `
+    <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .receipt-info { margin-bottom: 20px; }
+          .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          .items-table th, .items-table td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+          .items-table th { background-color: #f5f5f5; }
+          .totals { text-align: right; margin-top: 20px; }
+          .totals div { margin: 5px 0; }
+          .total-amount { font-size: 1.2em; font-weight: bold; margin-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Payment Receipt</h1>
+          <p>Thank you for your purchase!</p>
+        </div>
+        <div class="receipt-info">
+          <p><strong>Order ID:</strong> ${orderId}</p>
+          <p><strong>Transaction ID:</strong> ${transactionId}</p>
+          <p><strong>Customer:</strong> ${customerName}</p>
+          <p><strong>Email:</strong> ${customerEmail}</p>
+          <p><strong>Payment Method:</strong> ${paymentMethod}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+        </div>
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Quantity</th>
+              <th>Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(item => `
+              <tr>
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>$${item.price.toFixed(2)}</td>
+                <td>$${item.total.toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="totals">
+          <div><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</div>
+          <div><strong>Tax:</strong> $${tax.toFixed(2)}</div>
+          <div class="total-amount"><strong>Total:</strong> $${amount.toFixed(2)}</div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 export class ReceiptGenerator {
   static async generatePDF(orderId: string): Promise<Buffer> {
     try {

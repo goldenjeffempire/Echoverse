@@ -1807,7 +1807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               paymentMethod: 'card',
               transactionId: paymentIntent.id,
               customerEmail: userEmail,
-              customerName: req.user!.name || 'Customer',
+              customerName: req.user!.username || 'Customer',
               items: orderItems.map(item => ({
                 name: item.productId,
                 quantity: item.quantity,
