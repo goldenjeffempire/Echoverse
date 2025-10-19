@@ -28,6 +28,7 @@ export function AIChatbot() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const [csrfToken, setCsrfToken] = useState<string | null>(null);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -35,20 +36,21 @@ export function AIChatbot() {
     }
   }, [messages]);
 
-  const getCsrfToken = (): string | null => {
-    const cookies = document.cookie.split(';');
-    for (const cookie of cookies) {
-      const [name, value] = cookie.trim().split('=');
-      if (name === 'XSRF-TOKEN' || name === 'CSRF-TOKEN' || name === '__Host-CSRF-TOKEN') {
-        try {
-          return decodeURIComponent(value);
-        } catch {
-          return value;
-        }
-      }
+  // Fetch CSRF token when chatbot opens
+  useEffect(() => {
+    if (isOpen && !csrfToken) {
+      fetch("/api/csrf-token", { credentials: "include" })
+        .then(res => res.json())
+        .then(data => {
+          if (data.token) {
+            setCsrfToken(data.token);
+          }
+        })
+        .catch(err => {
+          console.error("Failed to fetch CSRF token:", err);
+        });
     }
-    return null;
-  };
+  }, [isOpen, csrfToken]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -66,13 +68,21 @@ export function AIChatbot() {
     setIsLoading(true);
 
     try {
-      const csrfToken = getCsrfToken();
+      // Ensure we have a CSRF token
+      let token = csrfToken;
+      if (!token) {
+        const tokenResponse = await fetch("/api/csrf-token", { credentials: "include" });
+        const tokenData = await tokenResponse.json();
+        token = tokenData.token;
+        setCsrfToken(token);
+      }
+
       const headers: Record<string, string> = { 
         "Content-Type": "application/json"
       };
       
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
+      if (token) {
+        headers['X-CSRF-Token'] = token;
       }
       
       if (localStorage.getItem('token')) {
@@ -85,7 +95,7 @@ export function AIChatbot() {
         credentials: "include",
         body: JSON.stringify({ 
           message: userInput, 
-          context: messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n')
+          context: ""
         })
       });
 
