@@ -8,6 +8,10 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useRef } from "react";
 import Navbar from "@/components/Navbar";
+import { PowerTriangle } from "@/components/PowerTriangle";
+import { AIBuilderDemo } from "@/components/AIBuilderDemo";
+import { CreatorHub } from "@/components/CreatorHub";
+import { AIPricingRecommender } from "@/components/AIPricingRecommender";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 60 },
@@ -568,6 +572,9 @@ export default function HomePage() {
         </div>
       </motion.section>
 
+      {/* AI Builder Interactive Demo */}
+      <AIBuilderDemo />
+
       {/* Marketing Analytics Visual Showcase - NEW */}
       <motion.section
         initial={{ opacity: 0, y: 40 }}
@@ -1126,6 +1133,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Power Triangle Visualization */}
+      <PowerTriangle />
+
       {/* Integrations Section - New */}
       <section className="py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
@@ -1239,6 +1249,12 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
+
+      {/* Creator Hub - Success Stories */}
+      <CreatorHub />
+
+      {/* AI-Powered Pricing Recommender */}
+      <AIPricingRecommender />
 
       {/* Pricing Section - Enhanced */}
       <section id="pricing" className="py-24 px-4 sm:px-6 lg:px-8">
