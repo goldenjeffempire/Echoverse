@@ -21,7 +21,7 @@ export default defineConfig({
     minify: "esbuild",
     target: "es2020",
     cssCodeSplit: true,
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 500, // ISSUE #28 FIX: Reduce from 1000 to 500kb to enforce budget
     rollupOptions: {
       output: {
         manualChunks: {

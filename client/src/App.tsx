@@ -1,5 +1,5 @@
 import { Switch, Route, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, Suspense, lazy } from "react";
 import React from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -16,39 +16,44 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AIChatbot } from "@/components/ai-chatbot";
 import { csrfManager } from "@/lib/csrf-manager";
+
+// ISSUE #27 FIX: Implement lazy loading for routes to reduce initial bundle size
+// Core pages loaded immediately (home, login, 404)
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
 import LoginPage from "@/pages/login";
-import RegisterPage from "@/pages/register";
-import ResetPasswordPage from "@/pages/reset-password";
-import ProfilePage from "@/pages/profile";
-import OrdersPage from "@/pages/orders";
-import ProductsPage from "@/pages/products";
-import CheckoutPage from "@/pages/checkout";
-import SearchPage from "@/pages/search";
-import TermsPage from "@/pages/terms";
-import PrivacyPage from "@/pages/privacy";
-import AboutPage from "@/pages/about";
-import ContactPage from "@/pages/contact";
-import DashboardPage from "@/pages/dashboard";
-import BlogPage from "@/pages/blog";
-import CareersPage from "@/pages/careers";
-import DocumentationPage from "@/pages/documentation";
-import ApiReferencePage from "@/pages/api-reference";
-import SupportPage from "@/pages/support";
-import CookiePolicyPage from "@/pages/cookie-policy";
-import PricingPage from "@/pages/pricing";
-import TemplatesPage from "@/pages/templates";
-import AIBuilderPage from "@/pages/ai-builder";
-import WebsiteBuilder from "@/pages/website-builder";
-import AIDemoPage from "@/pages/ai-demo";
-import EcommercePage from "@/pages/ecommerce";
-import CmsPage from "@/pages/cms";
-import CommunityPage from "@/pages/community";
-import MarketingPage from "@/pages/marketing";
-import MarketplacePage from "@/pages/marketplace";
-import UsersPage from "@/pages/users";
-import SettingsPage from "@/pages/settings";
+
+// All other pages lazy loaded
+const RegisterPage = lazy(() => import("@/pages/register"));
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
+const ProfilePage = lazy(() => import("@/pages/profile"));
+const OrdersPage = lazy(() => import("@/pages/orders"));
+const ProductsPage = lazy(() => import("@/pages/products"));
+const CheckoutPage = lazy(() => import("@/pages/checkout"));
+const SearchPage = lazy(() => import("@/pages/search"));
+const TermsPage = lazy(() => import("@/pages/terms"));
+const PrivacyPage = lazy(() => import("@/pages/privacy"));
+const AboutPage = lazy(() => import("@/pages/about"));
+const ContactPage = lazy(() => import("@/pages/contact"));
+const DashboardPage = lazy(() => import("@/pages/dashboard"));
+const BlogPage = lazy(() => import("@/pages/blog"));
+const CareersPage = lazy(() => import("@/pages/careers"));
+const DocumentationPage = lazy(() => import("@/pages/documentation"));
+const ApiReferencePage = lazy(() => import("@/pages/api-reference"));
+const SupportPage = lazy(() => import("@/pages/support"));
+const CookiePolicyPage = lazy(() => import("@/pages/cookie-policy"));
+const PricingPage = lazy(() => import("@/pages/pricing"));
+const TemplatesPage = lazy(() => import("@/pages/templates"));
+const AIBuilderPage = lazy(() => import("@/pages/ai-builder"));
+const WebsiteBuilder = lazy(() => import("@/pages/website-builder"));
+const AIDemoPage = lazy(() => import("@/pages/ai-demo"));
+const EcommercePage = lazy(() => import("@/pages/ecommerce"));
+const CmsPage = lazy(() => import("@/pages/cms"));
+const CommunityPage = lazy(() => import("@/pages/community"));
+const MarketingPage = lazy(() => import("@/pages/marketing"));
+const MarketplacePage = lazy(() => import("@/pages/marketplace"));
+const UsersPage = lazy(() => import("@/pages/users"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
 
 /**
  * CSRF Bootstrap Hook with Atomic Initialization
@@ -98,6 +103,15 @@ function useCSRFBootstrap() {
   return { csrfReady, csrfError };
 }
 
+// Loading fallback component for lazy loaded routes
+function RouteLoadingFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" data-testid="route-loading" />
+    </div>
+  );
+}
+
 function Router() {
   return (
     <Switch>
@@ -118,7 +132,9 @@ function Router() {
       <Route path="/register">
         {() => (
           <RouteErrorBoundary routeName="Register">
-            <RegisterPage />
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <RegisterPage />
+            </Suspense>
           </RouteErrorBoundary>
         )}
       </Route>
