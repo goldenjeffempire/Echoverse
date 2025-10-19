@@ -64,6 +64,16 @@ export async function createDatabaseBackup(options: BackupOptions = {}): Promise
       sizeMB: (stats.size / (1024 * 1024)).toFixed(2)
     });
 
+    // ISSUE #16 FIX: Automatically verify backup after creation
+    const verification = await verifyBackup(filePath);
+    if (!verification.valid) {
+      logger.error('Backup verification failed immediately after creation', undefined, {
+        filePath,
+        issues: verification.issues
+      });
+      throw new Error(`Backup created but verification failed: ${verification.issues.join(', ')}`);
+    }
+
     return filePath;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -120,6 +130,106 @@ export async function listBackups(backupDir: string = './backups'): Promise<Arra
       return [];
     }
     throw error;
+  }
+}
+
+/**
+ * Verify backup integrity
+ * ISSUE #16 FIX: Add automatic backup verification
+ * 
+ * Performs the following checks:
+ * 1. File exists and is readable
+ * 2. File is not empty (minimum size check)
+ * 3. For compressed files, verify gzip integrity
+ * 4. For SQL files, verify valid SQL headers
+ */
+export async function verifyBackup(backupFilePath: string): Promise<{
+  valid: boolean;
+  issues: string[];
+  size: number;
+  compressed: boolean;
+}> {
+  const issues: string[] = [];
+  
+  try {
+    // Check file exists
+    const stats = await fs.stat(backupFilePath);
+    
+    // Check minimum size (should be at least 1KB for a valid backup)
+    if (stats.size < 1024) {
+      issues.push(`Backup file is suspiciously small: ${stats.size} bytes`);
+    }
+    
+    const isCompressed = backupFilePath.endsWith('.gz');
+    
+    // Read first few bytes to verify format
+    const handle = await fs.open(backupFilePath, 'r');
+    const buffer = Buffer.alloc(1024);
+    await handle.read(buffer, 0, 1024, 0);
+    await handle.close();
+    
+    if (isCompressed) {
+      // Verify gzip magic number (1f 8b)
+      if (buffer[0] !== 0x1f || buffer[1] !== 0x8b) {
+        issues.push('Invalid gzip file format - magic number mismatch');
+      }
+      
+      // Try to decompress first chunk to verify integrity
+      try {
+        const { gunzipSync } = await import('zlib');
+        const decompressed = gunzipSync(buffer.slice(0, 100));
+        
+        // Check for SQL header
+        const header = decompressed.toString('utf8').substring(0, 100);
+        if (!header.includes('PostgreSQL') && !header.includes('--') && !header.includes('CREATE')) {
+          issues.push('Decompressed content does not appear to be valid SQL');
+        }
+      } catch (error) {
+        issues.push(`gzip decompression test failed: ${error instanceof Error ? error.message : 'unknown'}`);
+      }
+    } else {
+      // For uncompressed SQL, check for SQL headers
+      const content = buffer.toString('utf8');
+      if (!content.includes('PostgreSQL') && !content.includes('--') && !content.includes('CREATE') && !content.includes('INSERT')) {
+        issues.push('File does not appear to contain valid SQL content');
+      }
+    }
+    
+    const valid = issues.length === 0;
+    
+    if (valid) {
+      logger.info('Backup verification passed', { 
+        backupFile: backupFilePath, 
+        size: stats.size,
+        compressed: isCompressed 
+      });
+    } else {
+      logger.warn('Backup verification failed', { 
+        backupFile: backupFilePath, 
+        issues 
+      });
+    }
+    
+    return {
+      valid,
+      issues,
+      size: stats.size,
+      compressed: isCompressed
+    };
+    
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Backup verification error', error instanceof Error ? error : undefined, { 
+      backupFile: backupFilePath,
+      errorMessage 
+    });
+    
+    return {
+      valid: false,
+      issues: [`Verification error: ${errorMessage}`],
+      size: 0,
+      compressed: backupFilePath.endsWith('.gz')
+    };
   }
 }
 

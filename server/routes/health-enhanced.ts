@@ -98,30 +98,37 @@ async function checkRedis(): Promise<ComponentHealth> {
 
 /**
  * Check AI providers health
+ * ISSUE #18 FIX: Integrate AI provider health checks with main health endpoint
  */
 async function checkAI(): Promise<ComponentHealth> {
+  const startTime = Date.now();
+  
   try {
-    // AI provider health check is handled through the AI service
-    // For now, return healthy if AI service is available
-    const health = {
-      primary: { available: true },
-      fallback: { available: true }
-    };
+    // Import AI health check function
+    const { checkAIHealth } = await import('../ai');
+    const health = await checkAIHealth();
     
-    const isPrimaryAvailable = health.primary?.available || false;
-    const isFallbackAvailable = health.fallback?.available || false;
+    const responseTime = Date.now() - startTime;
     
-    if (isPrimaryAvailable && isFallbackAvailable) {
+    if (health.available && health.provider && health.fallback) {
       return {
         status: 'healthy',
+        responseTime,
         message: 'All AI providers available',
-        details: health
+        details: {
+          primary: health.provider,
+          fallback: health.fallback
+        }
       };
-    } else if (isFallbackAvailable) {
+    } else if (health.available) {
       return {
         status: 'degraded',
-        message: 'Only fallback AI provider available',
-        details: health
+        responseTime,
+        message: health.fallback ? 'Only fallback AI provider available' : 'Only primary AI provider available',
+        details: {
+          primary: health.provider,
+          fallback: health.fallback
+        }
       };
     } else {
       return {
