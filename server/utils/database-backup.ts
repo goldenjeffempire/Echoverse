@@ -140,7 +140,7 @@ export async function listBackups(backupDir: string = './backups'): Promise<Arra
  * Performs the following checks:
  * 1. File exists and is readable
  * 2. File is not empty (minimum size check)
- * 3. For compressed files, verify gzip integrity
+ * 3. For compressed files, verify gzip integrity using gzip -t
  * 4. For SQL files, verify valid SQL headers
  */
 export async function verifyBackup(backupFilePath: string): Promise<{
@@ -162,33 +162,31 @@ export async function verifyBackup(backupFilePath: string): Promise<{
     
     const isCompressed = backupFilePath.endsWith('.gz');
     
-    // Read first few bytes to verify format
-    const handle = await fs.open(backupFilePath, 'r');
-    const buffer = Buffer.alloc(1024);
-    await handle.read(buffer, 0, 1024, 0);
-    await handle.close();
-    
     if (isCompressed) {
-      // Verify gzip magic number (1f 8b)
-      if (buffer[0] !== 0x1f || buffer[1] !== 0x8b) {
-        issues.push('Invalid gzip file format - magic number mismatch');
+      // Verify gzip integrity using gzip -t (test integrity without decompressing)
+      try {
+        await execAsync(`gzip -t "${backupFilePath}"`);
+        logger.debug('gzip integrity check passed', { backupFile: backupFilePath });
+      } catch (error) {
+        issues.push(`gzip integrity check failed: ${error instanceof Error ? error.message : 'unknown'}`);
       }
       
-      // Try to decompress first chunk to verify integrity
+      // Read first chunk of decompressed data to verify SQL content
       try {
-        const { gunzipSync } = await import('zlib');
-        const decompressed = gunzipSync(buffer.slice(0, 100));
-        
-        // Check for SQL header
-        const header = decompressed.toString('utf8').substring(0, 100);
-        if (!header.includes('PostgreSQL') && !header.includes('--') && !header.includes('CREATE')) {
+        const { stdout } = await execAsync(`gunzip -c "${backupFilePath}" | head -c 1024`);
+        if (!stdout.includes('PostgreSQL') && !stdout.includes('--') && !stdout.includes('CREATE')) {
           issues.push('Decompressed content does not appear to be valid SQL');
         }
       } catch (error) {
-        issues.push(`gzip decompression test failed: ${error instanceof Error ? error.message : 'unknown'}`);
+        issues.push(`Failed to read decompressed content: ${error instanceof Error ? error.message : 'unknown'}`);
       }
     } else {
-      // For uncompressed SQL, check for SQL headers
+      // For uncompressed SQL, read first chunk to check for SQL headers
+      const handle = await fs.open(backupFilePath, 'r');
+      const buffer = Buffer.alloc(1024);
+      await handle.read(buffer, 0, 1024, 0);
+      await handle.close();
+      
       const content = buffer.toString('utf8');
       if (!content.includes('PostgreSQL') && !content.includes('--') && !content.includes('CREATE') && !content.includes('INSERT')) {
         issues.push('File does not appear to contain valid SQL content');
