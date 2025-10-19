@@ -24,7 +24,8 @@ import { apiTimeoutMiddleware } from "./middleware/api-timeout";
 import { sessionRotationMiddleware } from "./middleware/session-rotation";
 import { trackRequest } from "./utils/graceful-shutdown";
 import { connectionPoolCircuitBreaker } from "./middleware/connection-pool-circuit-breaker";
-import { startMockOllama } from "./mock-ollama";
+// Mock Ollama removed - using real local AI with Transformers.js
+// import { startMockOllama } from "./mock-ollama";
 import { cspNonceMiddleware } from './middleware/csp-nonce';
 import { validateCriticalEnvVars, strictBodySizeLimits, fileUploadRateLimit, contentTypeValidation, enforcePagination } from './middleware/critical-security';
 import { enforceQueryTimeout } from './middleware/auth-security';
@@ -112,8 +113,10 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
+// Mock Ollama removed - now using production-ready local AI with Transformers.js
+// Real local AI models will be downloaded automatically on first use
 if (process.env.NODE_ENV === 'development') {
-  startMockOllama();
+  logger.info('Using local Transformers.js AI provider (production-ready)');
 }
 
 // P0 FIX #6: Redis health check on startup when configured

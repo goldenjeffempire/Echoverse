@@ -49,6 +49,22 @@ export class TransformersProvider implements AIProvider {
   }): Promise<string> {
     await this.ensureInitialized();
 
+    // GPT-2 cannot reliably generate JSON or handle streaming
+    // Fall back to OpenAI for these requests
+    if (params.jsonMode) {
+      throw new AIServiceError(
+        'Local AI does not support JSON mode - falling back to OpenAI',
+        501
+      );
+    }
+
+    if (params.stream) {
+      throw new AIServiceError(
+        'Local AI does not support streaming - falling back to OpenAI',
+        501
+      );
+    }
+
     const messages = [
       { role: 'system', content: params.systemPrompt },
       { role: 'user', content: params.userPrompt }
@@ -124,12 +140,19 @@ export class TransformersProvider implements AIProvider {
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized && this.initPromise) {
-      await this.initPromise;
+      try {
+        await this.initPromise;
+      } catch (error) {
+        throw new AIServiceError(
+          'Local AI models are still downloading. Please wait a moment or use OpenAI fallback.',
+          503
+        );
+      }
     }
     if (!this.initialized) {
       throw new AIServiceError(
-        'Local AI provider not initialized',
-        500
+        'Local AI provider failed to initialize. Using OpenAI fallback.',
+        503
       );
     }
   }

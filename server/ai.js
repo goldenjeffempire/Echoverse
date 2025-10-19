@@ -120,7 +120,7 @@ export async function optimizeForSEO(content, targetKeywords) {
 export async function generateChatbotResponse(userMessage, context = '') {
     const sanitizedMessage = sanitizeAIPrompt(userMessage, 1000);
     const sanitizedContext = sanitizeInput(context, { maxLength: 2000 });
-    const systemPrompt = `You are a helpful AI assistant for the EchoVerse platform. You help users with website building, e-commerce, content creation, and platform features. Be friendly, informative, and concise. Always try to guide users toward relevant platform features.`;
+    const systemPrompt = `You are EchoBot, a helpful AI assistant for the EchoVerse platform. You help users with website building, e-commerce, content creation, and platform features. Be friendly, informative, and concise. Always try to guide users toward relevant platform features.`;
     try {
         const response = await aiRouter.chatCompletion({
             systemPrompt: sanitizedContext ? `${systemPrompt}\n\nContext: ${sanitizedContext}` : systemPrompt,

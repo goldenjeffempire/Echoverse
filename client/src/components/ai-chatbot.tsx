@@ -20,7 +20,7 @@ export function AIChatbot() {
     {
       id: "welcome",
       role: "assistant",
-      content: "👋 Hello! I'm your EchoVerse AI assistant. I can help you build websites, manage your e-commerce, create content, and answer any questions about the platform. How can I help you today?",
+      content: "👋 Hello! I'm EchoBot, your AI assistant. I can help you build websites, manage your e-commerce, create content, and answer any questions about the platform. How can I help you today?",
       timestamp: new Date()
     }
   ]);
@@ -197,7 +197,7 @@ export function AIChatbot() {
                       <Bot className="w-6 h-6" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-bold">AI Assistant</CardTitle>
+                      <CardTitle className="text-lg font-bold">EchoBot</CardTitle>
                       <p className="text-xs text-white/80">Always here to help</p>
                     </div>
                   </div>

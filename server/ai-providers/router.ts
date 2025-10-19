@@ -1,5 +1,5 @@
 import { AIProvider, getAIConfig, ProviderHealth, TokenUsage, AIRequestLog } from './base';
-import { OllamaProvider } from './ollama';
+import { TransformersProvider } from './transformers';
 import { OpenAIProvider } from './openai';
 import { AIServiceError } from '../utils/errors';
 import { logger } from '../logger';
@@ -44,22 +44,21 @@ class AIProviderRouter {
   constructor() {
     this.config = getAIConfig();
     
-    // Cloud-deployment friendly: Allow OpenAI as primary when local AI infrastructure isn't available
-    const allowOpenAIAsPrimary = process.env.AI_ALLOW_OPENAI_PRIMARY === 'true' || process.env.NODE_ENV === 'production';
+    // Production-ready: Use local Transformers.js as primary, OpenAI as fallback
+    const forceOpenAIAsPrimary = process.env.AI_FORCE_OPENAI_PRIMARY === 'true';
     
-    if (this.config.primary === 'local' || (this.config.primary !== 'openai' && !allowOpenAIAsPrimary)) {
-      this.primaryProvider = new OllamaProvider();
-      this.fallbackProvider = this.config.fallback === 'openai' ? new OpenAIProvider() : null;
-    } else if (this.config.primary === 'openai' || allowOpenAIAsPrimary) {
-      // Cloud deployment: Use OpenAI as primary when local infrastructure unavailable
+    if (forceOpenAIAsPrimary || this.config.primary === 'openai') {
+      // Only use OpenAI as primary if explicitly forced
       this.primaryProvider = new OpenAIProvider();
-      this.fallbackProvider = null; // No fallback needed when OpenAI is primary
-      logger.info('Using OpenAI as primary AI provider for cloud deployment');
+      this.fallbackProvider = null;
+      logger.info('Using OpenAI as primary AI provider (explicitly configured)');
     } else {
-      throw new Error(
-        `CONFIGURATION ERROR: Invalid AI_PROVIDER_PRIMARY: "${this.config.primary}". ` +
-        `Supported values: "local" (with Ollama) or "openai" (cloud deployment).`
-      );
+      // Default: Use local Transformers.js as primary, OpenAI as fallback
+      this.primaryProvider = new TransformersProvider();
+      this.fallbackProvider = this.config.fallback === 'openai' ? new OpenAIProvider() : null;
+      logger.info('Using local Transformers.js as primary AI provider', {
+        fallback: this.fallbackProvider ? 'OpenAI' : 'None'
+      });
     }
     
     this.primaryHealth = {

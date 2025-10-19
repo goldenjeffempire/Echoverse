@@ -62,8 +62,18 @@ app.post('/api/chat', (req, res) => {
 const PORT = 11434;
 
 export function startMockOllama() {
-  app.listen(PORT, '127.0.0.1', () => {
+  const server = app.listen(PORT, '127.0.0.1', () => {
     logger.info(`Mock Ollama service running on http://localhost:${PORT}`);
     logger.info('This is a development mock - production uses OpenAI fallback');
+  });
+
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE') {
+      logger.warn(`Mock Ollama port ${PORT} already in use - skipping mock service`, {
+        message: 'This is normal if the server was restarted. OpenAI fallback will be used.'
+      });
+    } else {
+      logger.error('Mock Ollama server error', error);
+    }
   });
 }
