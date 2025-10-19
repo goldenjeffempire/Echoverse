@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, ShoppingCart, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 interface Product {
   id: string;
@@ -78,6 +79,13 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb 
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Products' }
+        ]}
+        data-testid="breadcrumb-products"
+      />
       <div>
         <h1 className="text-3xl font-bold">Products</h1>
         <p className="text-gray-600 dark:text-gray-400">Browse our product catalog</p>

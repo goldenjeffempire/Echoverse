@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Package, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 interface Order {
   id: string;
@@ -79,6 +80,13 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumb 
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'My Orders' }
+        ]}
+        data-testid="breadcrumb-orders"
+      />
       <div>
         <h1 className="text-3xl font-bold">My Orders</h1>
         <p className="text-gray-600 dark:text-gray-400">Track and manage your orders</p>

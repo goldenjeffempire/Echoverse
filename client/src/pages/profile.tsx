@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, User, Lock, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -97,6 +98,13 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <Breadcrumb 
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Profile' }
+        ]}
+        data-testid="breadcrumb-profile"
+      />
       <div className="flex items-center space-x-4">
         <Avatar className="h-20 w-20">
           <AvatarImage src={user.avatar} />

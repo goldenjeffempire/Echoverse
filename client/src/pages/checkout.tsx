@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Loader2, CreditCard, Truck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
+import { Breadcrumb } from '@/components/Breadcrumb';
 
 export default function CheckoutPage() {
   const { user } = useAuth();
@@ -62,8 +63,16 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Checkout</h1>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <Breadcrumb 
+        items={[
+          { label: 'Home', href: '/' },
+          { label: 'Products', href: '/products' },
+          { label: 'Checkout' }
+        ]}
+        data-testid="breadcrumb-checkout"
+      />
+      <h1 className="text-3xl font-bold">Checkout</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
