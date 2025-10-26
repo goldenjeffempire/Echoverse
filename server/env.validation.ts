@@ -34,8 +34,10 @@ const envSchema = z.object({
   MAX_SESSIONS_PER_USER: z.string().transform(Number).pipe(z.number().int().positive()).default('5'),
   SESSION_EXPIRY_MS: z.string().transform(Number).pipe(z.number().int().positive()).default('86400000'),
 
-  // OPENAI_API_KEY: Required for AI features, but fallback exists
-  OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required for AI features'),
+  // OPENAI_API_KEY: Required for AI features in production, optional in development
+  OPENAI_API_KEY: isDevelopment
+    ? z.string().optional().default('')
+    : z.string().min(1, 'OPENAI_API_KEY is required for AI features in production'),
   AI_PROVIDER_PRIMARY: z.enum(['local', 'openai']).default('local'),
   AI_PROVIDER_FALLBACK: z.enum(['openai', 'none']).default('openai'),
   LOCAL_AI_ENDPOINT: z.string().url().default('http://localhost:11434'),
