@@ -4,6 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "screenshots": "tsx scripts/capture-screenshots.ts",
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "NODE_ENV=production vite build && tsc --noEmit false",
     "build:cdn": "npm run build && tsx scripts/cdn-upload.ts",
