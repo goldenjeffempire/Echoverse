@@ -242,19 +242,19 @@ router.get('/health', async (req, res) => {
     };
 
     const [database, redis, ai, stripe, disk, memory] = await Promise.all([
-      withTimeout(checkDatabase(), 15000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkDatabase(), 2000).catch((e): ComponentHealth => ({ 
         status: 'unhealthy', message: 'Database check timeout', details: { error: e.message } 
       })),
-      withTimeout(checkRedis(), 5000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkRedis(), 1000).catch((e): ComponentHealth => ({ 
         status: 'degraded', message: 'Redis check timeout', details: { error: e.message } 
       })),
-      withTimeout(checkAI(), 5000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkAI(), 2000).catch((e): ComponentHealth => ({ 
         status: 'degraded', message: 'AI check timeout', details: { error: e.message } 
       })),
-      withTimeout(checkStripe(), 5000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkStripe(), 2000).catch((e): ComponentHealth => ({ 
         status: 'degraded', message: 'Stripe check timeout', details: { error: e.message } 
       })),
-      withTimeout(checkDisk(), 5000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkDisk(), 1000).catch((e): ComponentHealth => ({ 
         status: 'degraded', message: 'Disk check timeout', details: { error: e.message } 
       })),
       Promise.resolve(checkMemory())
@@ -311,10 +311,10 @@ router.get('/ready', async (req, res) => {
 
     // Check critical components only
     const [database, ai] = await Promise.all([
-      withTimeout(checkDatabase(), 15000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkDatabase(), 2000).catch((e): ComponentHealth => ({ 
         status: 'unhealthy', message: 'Database check timeout', details: { error: e.message } 
       })),
-      withTimeout(checkAI(), 5000).catch((e): ComponentHealth => ({ 
+      withTimeout(checkAI(), 2000).catch((e): ComponentHealth => ({ 
         status: 'degraded', message: 'AI check timeout', details: { error: e.message } 
       }))
     ]);
