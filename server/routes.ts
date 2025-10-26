@@ -140,9 +140,16 @@ import { validateEnvironmentVariables } from './env.validation';
 
 // Environment variables are validated on startup in index.ts
 // No need for duplicate checks here
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+// Make Stripe optional in development
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-08-27.basil",
-});
+}) : null;
+
+if (!stripe && process.env.NODE_ENV === 'production') {
+  console.error('⚠️  CRITICAL: STRIPE_SECRET_KEY not set in production!');
+} else if (!stripe) {
+  console.warn('⚠️  WARNING: Stripe not configured - payment features will be disabled');
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // API Versioning Middleware - Add version headers to all API responses
@@ -847,6 +854,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const { stripeIdempotencyMiddleware, getStripeIdempotencyKey } = await import('./middleware/stripe-idempotency');
   
   app.post("/api/create-payment-intent", authenticateToken, requireEmailVerification, stripeIdempotencyMiddleware, validateRequest(createPaymentIntentSchema), async (req: AuthenticatedRequest, res) => {
+    if (!stripe) {
+      res.status(503).json({ message: "Payment processing is not configured. Please contact support." });
+      return;
+    }
     try {
       const { amount } = req.body;
       const idempotencyKey = getStripeIdempotencyKey(req as any);
@@ -870,6 +881,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // P0 FIX #22: Subscription endpoint with idempotency protection
   app.post('/api/get-or-create-subscription', authenticateToken, requireEmailVerification, stripeIdempotencyMiddleware, validateRequest(createSubscriptionSchema), async (req: AuthenticatedRequest, res) => {
+    if (!stripe) {
+      res.status(503).json({ message: "Payment processing is not configured. Please contact support." });
+      return;
+    }
     const user = req.user!;
 
     if (user.stripeSubscriptionId) {
@@ -946,6 +961,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stripe webhook handler - uses raw body parser configured in server/index.ts
   // CRIT-004 FIX: Add IP whitelist validation to prevent spoofing attacks
   app.post('/api/webhooks/stripe', stripeIPWhitelistMiddleware, webhookRateLimiter, async (req, res) => {
+    if (!stripe) {
+      logger.error('Stripe is not configured. Rejecting webhook.');
+      return res.status(503).json({ error: 'Payment processing not configured' });
+    }
+
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
       logger.error('STRIPE_WEBHOOK_SECRET is not configured. Rejecting webhook.');
       return res.status(500).json({ error: 'Webhook secret not configured' });
@@ -1665,6 +1685,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/orders", authenticateToken, requireEmailVerification, idempotencyMiddleware, async (req: AuthenticatedRequest & { idempotencyKey?: string }, res) => {
+    if (!stripe) {
+      res.status(503).json({ message: "Payment processing is not configured. Please contact support." });
+      return;
+    }
     try {
       const { items, shippingAddress, paymentMethodId } = req.body;
       const idempotencyKey = req.idempotencyKey!;
