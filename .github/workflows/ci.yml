@@ -89,6 +89,11 @@ jobs:
         run: npm run test:coverage
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          SESSION_SECRET: test-session-secret-key-for-ci
+          JWT_SECRET: test-jwt-secret-key-for-ci
+          FILE_ENCRYPTION_KEY: test-file-encryption-key-for-ci-32
+          TWO_FACTOR_BACKUP_ENCRYPTION_KEY: test-2fa-backup-key-for-ci-32-chars
+          WEBHOOK_SIGNATURE_SECRET: test-webhook-signature-key-for-ci
       
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -136,6 +141,11 @@ jobs:
         run: npm run test:e2e
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          SESSION_SECRET: test-session-secret-key-for-ci
+          JWT_SECRET: test-jwt-secret-key-for-ci
+          FILE_ENCRYPTION_KEY: test-file-encryption-key-for-ci-32
+          TWO_FACTOR_BACKUP_ENCRYPTION_KEY: test-2fa-backup-key-for-ci-32-chars
+          WEBHOOK_SIGNATURE_SECRET: test-webhook-signature-key-for-ci
       
       - name: Upload test results
         if: always()
