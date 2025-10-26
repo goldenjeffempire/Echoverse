@@ -64,18 +64,10 @@ class OrderFulfillmentService {
    * Get order details with items
    */
   private async getOrderDetails(orderId: string): Promise<unknown> {
-    const orderDetails = await db.query.orders.findFirst({
-      where: eq(orders.id, orderId),
-      with: {
-        items: {
-          with: {
-            product: true,
-            variant: true
-          }
-        },
-        user: true
-      }
-    });
+    const [orderDetails] = await db.select()
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
 
     return orderDetails;
   }
@@ -111,31 +103,33 @@ class OrderFulfillmentService {
       try {
         if (variantId) {
           // Update variant stock
-          const variant = await db.query.productVariants.findFirst({
-            where: eq(productVariants.id, variantId)
-          });
+          const [variant] = await db.select()
+            .from(productVariants)
+            .where(eq(productVariants.id, variantId))
+            .limit(1);
 
           if (variant) {
-            const newStock = Math.max(0, (variant.stock || 0) - quantity);
+            const newStock = Math.max(0, (variant.inventory || 0) - quantity);
             await db.update(productVariants)
-              .set({ stock: newStock })
+              .set({ inventory: newStock })
               .where(eq(productVariants.id, variantId));
 
-            logger.info('Variant stock updated', { variantId, oldStock: variant.stock, newStock });
+            logger.info('Variant inventory updated', { variantId, oldStock: variant.inventory, newStock });
           }
         } else {
-          // Update product stock
-          const product = await db.query.products.findFirst({
-            where: eq(products.id, productId)
-          });
+          // Update product inventory
+          const [product] = await db.select()
+            .from(products)
+            .where(eq(products.id, productId))
+            .limit(1);
 
           if (product) {
-            const newStock = Math.max(0, (product.stock || 0) - quantity);
+            const newStock = Math.max(0, (product.inventory || 0) - quantity);
             await db.update(products)
-              .set({ stock: newStock })
+              .set({ inventory: newStock })
               .where(eq(products.id, productId));
 
-            logger.info('Product stock updated', { productId, oldStock: product.stock, newStock });
+            logger.info('Product inventory updated', { productId, oldStock: product.inventory, newStock });
           }
         }
       } catch (error) {
@@ -287,24 +281,26 @@ class OrderFulfillmentService {
       try {
         if (variantId) {
           // Restore variant stock
-          const variant = await db.query.productVariants.findFirst({
-            where: eq(productVariants.id, variantId)
-          });
+          const [variant] = await db.select()
+            .from(productVariants)
+            .where(eq(productVariants.id, variantId))
+            .limit(1);
 
           if (variant) {
             await db.update(productVariants)
-              .set({ stock: (variant.stock || 0) + quantity })
+              .set({ inventory: (variant.inventory || 0) + quantity })
               .where(eq(productVariants.id, variantId));
           }
         } else {
-          // Restore product stock
-          const product = await db.query.products.findFirst({
-            where: eq(products.id, productId)
-          });
+          // Restore product inventory
+          const [product] = await db.select()
+            .from(products)
+            .where(eq(products.id, productId))
+            .limit(1);
 
           if (product) {
             await db.update(products)
-              .set({ stock: (product.stock || 0) + quantity })
+              .set({ inventory: (product.inventory || 0) + quantity })
               .where(eq(products.id, productId));
           }
         }

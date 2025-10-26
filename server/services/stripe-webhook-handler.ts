@@ -160,8 +160,8 @@ class StripeWebhookHandler {
       const { ReceiptGenerator } = await import('../utils/receipt-generator');
       const receiptBuffer = await ReceiptGenerator.generatePDF(orderId);
       
-      const emailService = (await import('./email')).emailService;
-      await emailService.sendEmail({
+      const { sendEmail } = await import('./email-production.service');
+      await sendEmail({
         to: order.customerEmail || '',
         subject: 'Order Confirmation - Payment Successful',
         html: `
@@ -198,8 +198,8 @@ class StripeWebhookHandler {
         // Update order status to mark as failed
         await storage.updateOrderStatus(orderId, 'pending', 'failed');
         if (order?.customerEmail) {
-          const emailService = (await import('./email')).emailService;
-          await emailService.sendEmail({
+          const { sendEmail } = await import('./email-production.service');
+          await sendEmail({
             to: order.customerEmail,
             subject: 'Payment Failed - Action Required',
             html: `

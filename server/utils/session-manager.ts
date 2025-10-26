@@ -65,10 +65,11 @@ export async function cleanupOldSessions(keepPerUser: number = 5): Promise<numbe
       const { inArray } = await import('drizzle-orm');
       
       // CRITICAL FIX: Wrap entire cleanup in atomic transaction
+      const { desc } = await import('drizzle-orm');
       const deletedCount = await db.transaction(async (tx) => {
-        const allSessions = await tx.query.sessions.findMany({
-          orderBy: (sessions, { desc }) => [desc(sessions.lastActivityAt)]
-        });
+        const allSessions = await tx.select()
+          .from(sessions)
+          .orderBy(desc(sessions.lastActivityAt));
         
         const sessionsToDelete: string[] = [];
         const userSessions = new Map<string, number>();

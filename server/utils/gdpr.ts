@@ -7,7 +7,7 @@ import { db } from '../db';
 import { users, websites, posts, orders, communities, messages } from '../../shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { AuditLogger, AuditAction } from './audit-logger';
-import { logger } from './logger';
+import { logger } from '../logger';
 
 export interface GDPRExportData {
   user: any;
@@ -37,14 +37,14 @@ export class GDPRService {
         userMessages
       ] = await Promise.all([
         db.select().from(websites).where(eq(websites.userId, userId)),
-        db.select().from(posts).where(eq(posts.authorId, userId)),
+        db.select().from(posts).where(eq(posts.userId, userId)),
         db.select().from(orders).where(eq(orders.userId, userId)),
         db.select().from(communities).where(eq(communities.ownerId, userId)),
-        db.select().from(messages).where(eq(messages.userId, userId))
+        db.select().from(messages).where(eq(messages.senderId, userId))
       ]);
 
       const sanitizedUser = { ...user };
-      delete (sanitizedUser as any).passwordHash;
+      delete (sanitizedUser as any).password;
       delete (sanitizedUser as any).twoFactorSecret;
 
       await AuditLogger.log({
@@ -68,9 +68,8 @@ export class GDPRService {
         dataCategories: ['profile', 'content', 'transactions', 'communications']
       };
     } catch (error) {
-      logger.error('GDPR data export failed', {
-        userId,
-        error: error instanceof Error ? error.message : String(error)
+      logger.error('GDPR data export failed', error instanceof Error ? error : undefined, {
+        context: { userId }
       });
       throw error;
     }
@@ -83,9 +82,9 @@ export class GDPRService {
           .set({
             email: `deleted-${userId}@deleted.local`,
             username: `deleted-${userId}`,
-            passwordHash: '',
+            password: '',
             deletedAt: new Date(),
-            emailVerified: false,
+            isEmailVerified: false,
             twoFactorEnabled: false,
             twoFactorSecret: null
           })
@@ -97,7 +96,7 @@ export class GDPRService {
 
         await tx.update(posts)
           .set({ deletedAt: new Date() })
-          .where(eq(posts.authorId, userId));
+          .where(eq(posts.userId, userId));
 
         await tx.update(communities)
           .set({ deletedAt: new Date() })
@@ -151,10 +150,9 @@ export class GDPRService {
       .set({
         email: `anon-${userId}@anonymous.local`,
         username: `anonymous-${userId}`,
-        passwordHash: '',
-        profilePicture: null,
-        bio: null,
-        emailVerified: false,
+        password: '',
+        avatar: null,
+        isEmailVerified: false,
         twoFactorEnabled: false,
         twoFactorSecret: null
       })

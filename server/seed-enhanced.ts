@@ -58,8 +58,9 @@ export async function seedDevelopmentData() {
         username: user.username,
         password: hashedPassword,
         role: user.role as any,
-        name: user.name,
-        emailVerified: true,
+        firstName: user.name.split(' ')[0],
+        lastName: user.name.split(' ')[1] || '',
+        isEmailVerified: true,
       }).returning();
       createdUsers.push(created);
       console.log(`  ✓ Created user: ${user.email}`);
@@ -90,8 +91,8 @@ export async function seedDevelopmentData() {
         name: community.name,
         slug: community.slug,
         description: community.description,
-        creatorId: createdUsers[0].id,
-        type: community.type as any,
+        ownerId: createdUsers[0].id,
+        isPrivate: community.type === 'private',
       });
       console.log(`  ✓ Created community: ${community.name}`);
     }
@@ -114,12 +115,15 @@ export async function seedDevelopmentData() {
     // Seed sample orders
     console.log('Creating sample orders...');
     for (let i = 0; i < 5; i++) {
+      const subtotal = String((Math.random() * 200 + 50).toFixed(2));
       await db.insert(orders).values({
         userId: createdUsers[Math.floor(Math.random() * (createdUsers.length - 1)) + 1].id,
         customerEmail: createdUsers[i % createdUsers.length].email,
-        status: ['pending', 'processing', 'completed', 'cancelled'][Math.floor(Math.random() * 4)] as any,
-        total: String((Math.random() * 200 + 50).toFixed(2)),
-        currency: 'USD',
+        status: ['pending', 'processing', 'paid', 'cancelled'][Math.floor(Math.random() * 4)] as any,
+        subtotal,
+        total: subtotal,
+        totalAmount: subtotal,
+        currency: 'usd',
         items: JSON.stringify([{
           productId: createdProducts[i % createdProducts.length].id,
           name: createdProducts[i % createdProducts.length].name,

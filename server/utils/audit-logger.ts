@@ -173,23 +173,25 @@ export class AuditLogger {
     userId: string,
     limit: number = 100
   ): Promise<any[]> {
-    const logs = await db.query.auditLogs.findMany({
-      where: (auditLogs, { eq }) => eq(auditLogs.userId, userId),
-      orderBy: (auditLogs, { desc }) => [desc(auditLogs.timestamp)],
-      limit
-    });
+    const { eq, desc } = await import('drizzle-orm');
+    const logs = await db.select()
+      .from(auditLogs)
+      .where(eq(auditLogs.userId, userId))
+      .orderBy(desc(auditLogs.timestamp))
+      .limit(limit);
     return logs;
   }
 
   static async getSecurityEvents(hours: number = 24): Promise<any[]> {
+    const { and, eq, gte, desc } = await import('drizzle-orm');
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
-    const logs = await db.query.auditLogs.findMany({
-      where: (auditLogs, { and, eq, gte }) => and(
+    const logs = await db.select()
+      .from(auditLogs)
+      .where(and(
         eq(auditLogs.action, AuditAction.SECURITY_VIOLATION),
         gte(auditLogs.timestamp, cutoff)
-      ),
-      orderBy: (auditLogs, { desc }) => [desc(auditLogs.timestamp)]
-    });
+      ))
+      .orderBy(desc(auditLogs.timestamp));
     return logs;
   }
 }
