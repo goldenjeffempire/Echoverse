@@ -1,0 +1,143 @@
+Summary — critical blockers
+
+    TypeScript compilation failures (many TS errors) — build is blocked. See list below.
+    Test suite failing: 23 test files failing. Root cause in many tests: missing SESSION_SECRET in .env.test.
+    CI runtime / DB issues: Postgres in CI logging "role "root" does not exist" and DB init issues — integration tests may be connecting with wrong DB user.
+    Missing type declarations for third-party modules (e.g., nodemailer) causing TS errors.
+    Schema/type mismatches between code and database types (seeds and service usage referencing fields that do not exist).
+    Several implicit any / missing parameter types (TypeScript strictness violations).
+
+Detailed TypeScript compile errors (from CI job logs)
+
+    server/config/opentelemetry-production.ts(19,19)
+        TS2693: 'Resource' only refers to a type, but is being used as a value here.
+        Fix: change import usage to the runtime export or use type-only import. Example: import { Resource } from '@opentelemetry/resources'; ensure you're not mixing type-only import with value use.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/config/opentelemetry-production.ts
+
+    server/seed-enhanced.ts
+        (56,48), (89,36), (117,31) — TS2769: No overload matches this call / Object literal may only specify known properties / missing fields or mismatched fields for insert calls.
+        Fix: update seed object shapes to match the DB schema/type definitions used by your DB library (e.g., drizzle/pg). Remove or rename properties that do not exist in table type definitions or extend the DB typings.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/seed-enhanced.ts
+
+    server/services/email.service.ts(1,24)
+        TS7016: Could not find a declaration file for module 'nodemailer'. Implicit any.
+        Fix: npm i --save-dev @types/nodemailer (if available) OR add a d.ts file with declare module 'nodemailer'; OR import nodemailer with a typed wrapper.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/services/email.service.ts
+
+    server/services/order-fulfillment.service.ts
+        Multiple TS2339 & TS2353 errors: properties like orders, productVariants, products do not exist on type '{}' and object literal uses unknown properties 'stock' etc.
+        Fix: provide correct types for the objects you're operating on (cast to the DB model types or fix queries), ensure the DB model types include the fields you expect.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/services/order-fulfillment.service.ts
+
+    server/services/stripe-webhook-handler.ts(175,9)
+        TS2353: Object literal may only specify known properties, and 'attachments' does not exist in type 'EmailOptions'.
+        Fix: adapt to your email sending function's accepted options (attachments may need a specific type or must be excluded).
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/services/stripe-webhook-handler.ts
+
+    server/utils/audit-logger.ts
+        TS2339: Property 'auditLogs' does not exist on type '{}' (multiple lines).
+        TS7006 / TS7031: parameters and binding elements implicitly have 'any'.
+        Fix: annotate types for incoming objects (auditLogs) and their properties (eq, desc, and, gte, etc.). Add interface definitions for expected query/result shapes.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/utils/audit-logger.ts
+
+    server/utils/gdpr.ts
+        TS2307: Cannot find module './logger' or its type declarations.
+        TS2339: Property 'authorId' and 'userId' do not exist on PgTableWithColumns types.
+        TS2561: Object literal specifying fields not present in type (e.g., 'passwordHash').
+        Fixes: add ./logger module or update import to correct path; correct table column references; ensure the DB table typings match actual tables.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/utils/gdpr.ts
+
+    server/utils/session-manager.ts
+        TS2339: Property 'sessions' does not exist on type '{}'.
+        TS7006/TS7031: implicit any on parameter and binding elements.
+        Fix: add explicit types for session queries/results and function parameters.
+        File: https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/utils/session-manager.ts
+
+    Many files: implicit any and binding element implicit any errors (TypeScript strictness). Fix by adding explicit types or enabling allowImplicitAny=false was already on — so annotate.
+
+Test failures (CI test run)
+
+    23 test files failed (test runner reported 23 failed test files).
+    Example failing tests:
+        server/tests/email-integration.test.ts (FAIL)
+        server/tests/env-validation.test.ts (FAIL)
+        server/tests/security.test.ts (FAIL)
+        server/tests/utils.test.ts (FAIL)
+        server/tests/websocket.integration.test.ts (FAIL)
+        server/tests/integration.test.ts (FAIL)
+        client/src/contexts/lib/tests/csrf-manager.test.ts (FAIL)
+    Root recurring error (many tests):
+        Error: SESSION_SECRET must be set in .env.test — thrown at server/tests/setup.ts:13:9
+        Action: ensure CI supplies .env.test with a SESSION_SECRET or update test setup to set process.env.SESSION_SECRET in CI (or fallback to a test default).
+    Fix: add secrets/env for tests in CI pipeline, or mock session code in tests.
+
+CI / Postgres runtime issues
+
+    Postgres container logs show: FATAL: role "root" does not exist (multiple times). This suggests tests/CI attempt to connect as user root or the DB init expects a role that isn't created.
+    Also: docker-entrypoint.sh ignoring /docker-entrypoint-initdb.d/* in that run.
+    Action: ensure CI uses a DB user that exists (e.g., POSTGRES_USER env) or that test DB creation scripts create the required roles. Adjust test DB connection string or CI service configuration.
+
+Missing / incorrect dependencies & typings
+
+    nodemailer missing type declarations — TS7016 in server/services/email.service.ts.
+    PRODUCTION_READINESS_AUDIT_REPORT.md (repo) lists missing dependencies in a past audit (e.g., @sentry/node, @google-cloud/storage). Verify package.json and install missing runtime libraries and their types.
+    Action: install missing packages (npm i package) and dev types (npm i -D @types/package) as needed; add necessary type declarations.
+
+Schema / seed mismatches
+
+    Seeds reference fields not present in DB types (name, userId, creatorId, passwordHash, authorId, orderId, etc.) causing TS insert errors and compile-time mismatch.
+    Action: synchronize seed data with your DB models / schema files. If the schema intentionally changed, update table typings (or migrations).
+
+Linting / warnings / code quality
+
+    Pre-commit script warns about console.log/console.debug and TODO/FIXME but does not fail. There are helper scripts for cleaning console logs and tracking TODOs (scripts/cleanup-console-logs.sh and scripts/cleanup-production.ts).
+    There are TODO / FIXME comments and console.* statements in the codebase (scripts/util scanning behavior present).
+    Action: decide on stricter pre-commit/CI policy (fail on console.log, fail on TODOs) and run cleanup scripts; replace console.* with a logger.
+
+Documentation / repo inconsistencies
+
+    Multiple README / ECHOVERSE_README / ECHOVERSE_AI_SPECIFICATION / PRODUCTION_READINESS_AUDIT_REPORT files exist — some docs contain inconsistent architecture descriptions (one references Django backend structure while repo is a Node/TS app).
+    Action: consolidate documentation into a single canonical README and docs folder. Remove stale files or mark them archived to avoid confusion.
+
+Other issues and improvements (repo-level)
+
+    Implicit anys and missing parameter typings — convert to explicit types to satisfy strict TypeScript and to improve maintainability.
+    Improve error handling: ensure service functions validate inputs and return typed errors.
+    Centralize logging (replace ad-hoc console.* with a logging library configured per environment).
+    CI improvements:
+        Add .env.test secrets or set process.env fallbacks in test setup.
+        Configure Postgres test service user and DB consistently in workflow file (.github/workflows/ci.yml).
+        Cache node_modules or tsc output if needed for faster runs.
+    Security & production readiness:
+        Ensure sensitive info is not committed; use GitHub secrets in workflows.
+        Add Sentry, monitoring, and alerting if desired (audit report suggested missing Sentry packages).
+    Tests: add unit tests for newly typed modules and for seed data validations.
+
+Actionable prioritized fixes (recommended immediate order)
+
+    Fix test env secret: Add SESSION_SECRET to CI (in workflow) or set a test default in server/tests/setup.ts to unblock the 23 failing test files.
+    Install missing types: npm i -D @types/nodemailer or add a declaration file to silence TS7016.
+    Fix TypeScript compile errors that block build:
+        opentelemetry Resource import (use correct runtime import or change usage).
+        seed and insert overload mismatches: align seed objects with DB typings.
+        audit-logger/session-manager/gdpr/order-fulfillment: add/adjust types for DB results and function params.
+    Fix CI Postgres role issue: in .github/workflows/ci.yml set POSTGRES_USER/POSTGRES_PASSWORD matching the app's DB connection or change DB connection to use a created role.
+    Add missing module ./logger or adjust import paths for gdpr.ts.
+    Run tsc locally and fix remaining implicit any / binding element errors (add types).
+    Run test suite locally with .env.test set, iterate until green.
+    Once green, consider enforcing stricter pre-commit/CI rules for TODOs / console.log if desired.
+
+Where to look first (highest value files)
+
+    server/tests/setup.ts (failing due to SESSION_SECRET) — https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/__tests__/setup.ts
+    server/seed-enhanced.ts — seeds causing many TS insert mismatches — https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/seed-enhanced.ts
+    server/services/email.service.ts — nodemailer typing error — https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/services/email.service.ts
+    server/config/opentelemetry-production.ts — Resource import error — https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/config/opentelemetry-production.ts
+    server/services/order-fulfillment.service.ts — multiple type mismatches — https://github.com/goldenjeffempire/echoverse/blob/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/services/order-fulfillment.service.ts
+    server/utils/*.ts (audit-logger, gdpr, session-manager) — many implicit any/type issues — https://github.com/goldenjeffempire/echoverse/tree/fb51ba831ceb16a30443c5c5bede7de3844ba142/server/utils
+
+Other repo-level artifacts I found (useful references)
+
+    scripts/cleanup-production.ts and scripts/cleanup-console-logs.sh — contain helpers and scanning logic for TODO/console detection.
+    PRODUCTION_READINESS_AUDIT_REPORT.md — contains a prior audit listing many of the critical issues; use as checklist.
+
